@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_static_background">#000000</color>
+
+    <!-- Widget colors for light mode -->
+    <color name="widget_text_primary">#1C1B1F</color>
+    <color name="widget_text_secondary">#49454F</color>
+
+    <!-- Neumorphic base colors -->
+    <color name="neumorphic_background_light">#E0E5EC</color>
+    <color name="neumorphic_background_dark">#2D3436</color>
+    <color name="neumorphic_light_shadow_light">#FFFFFF</color>
+    <color name="neumorphic_dark_shadow_light">#A3B1C6</color>
+    <color name="neumorphic_light_shadow_dark">#3D4852</color>
+    <color name="neumorphic_dark_shadow_dark">#1E2326</color>
+</resources>
