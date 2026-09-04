@@ -79,7 +79,7 @@ import com.flexplayer.music.constants.PureBlackKey
 import com.flexplayer.music.constants.PureBlackMiniPlayerKey
 import com.flexplayer.music.constants.SelectedThemeColorKey
 import com.flexplayer.music.ui.theme.DefaultThemeColor
-import com.flexplayer.music.ui.theme.flex-playerTheme
+import com.flexplayer.music.ui.theme.flexPlayerTheme
 import com.flexplayer.music.utils.rememberEnumPreference
 import com.flexplayer.music.utils.rememberPreference
 
@@ -674,7 +674,7 @@ fun ThemeMockup(
         DarkMode.OFF -> false
     }
 
-    flex-playerTheme(
+    flexPlayerTheme(
         darkTheme = useDark,
         pureBlack = pureBlack,
         themeColor = themeColor
@@ -782,7 +782,7 @@ fun ThemeMockupPortrait(
         DarkMode.OFF -> false
     }
 
-    flex-playerTheme(
+    flexPlayerTheme(
         darkTheme = useDark,
         pureBlack = pureBlack,
         themeColor = themeColor

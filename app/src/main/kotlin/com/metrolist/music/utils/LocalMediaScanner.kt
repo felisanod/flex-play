@@ -24,7 +24,7 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 
 object LocalMediaScanner {
-    private const val flex-player_DIRECTORY = "flex-player/Music"
+    private const val flex_player_DIRECTORY = "flex-player/Music"
 
     suspend fun scanLocalMedia(context: Context, database: MusicDatabase): List<LocalMediaEntity> = withContext(Dispatchers.IO) {
         val localMediaList = mutableListOf<LocalMediaEntity>()
@@ -49,7 +49,7 @@ object LocalMediaScanner {
 
         val selection = "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ? OR ${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ?"
         val selectionArgs = arrayOf(
-            "%$flex-player_DIRECTORY%",
+            "%$flex_player_DIRECTORY%",
             "%flex-player%"
         )
 
@@ -111,7 +111,7 @@ object LocalMediaScanner {
                         thumbnailPath = thumbnailPath,
                         dateAdded = dateAdded,
                         dateModified = dateModified,
-                        isDownloaded = relativePath.contains(flex-player_DIRECTORY),
+                        isDownloaded = relativePath.contains(flex_player_DIRECTORY),
                     )
                     localMediaList.add(localMedia)
                 }

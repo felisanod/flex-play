@@ -2206,10 +2206,10 @@ fun OriginalLyrics(
 }
 
 // Professional page animation constants inspired by flex-player design - slower for smoothness
-private const val flex-player_AUTO_SCROLL_DURATION = 1500L // Much slower auto-scroll for smooth transitions
-private const val flex-player_INITIAL_SCROLL_DURATION = 1000L // Slower initial positioning
-private const val flex-player_SEEK_DURATION = 800L // Slower user interaction
-private const val flex-player_FAST_SEEK_DURATION = 600L // Less aggressive seeking
+private const val flex_player_AUTO_SCROLL_DURATION = 1500L // Much slower auto-scroll for smooth transitions
+private const val flex_player_INITIAL_SCROLL_DURATION = 1000L // Slower initial positioning
+private const val flex_player_SEEK_DURATION = 800L // Slower user interaction
+private const val flex_player_FAST_SEEK_DURATION = 600L // Less aggressive seeking
 
 // Lyrics constants
 val LyricsPreviewTime = 2.seconds

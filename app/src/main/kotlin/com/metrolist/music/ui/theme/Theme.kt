@@ -29,7 +29,7 @@ import com.flexplayer.music.R
 val DefaultThemeColor = Color(0xFFED5564)
 
 @Composable
-fun flex-playerTheme(
+fun flexPlayerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     pureBlack: Boolean = false,
     themeColor: Color = DefaultThemeColor,

@@ -50,7 +50,7 @@ object LastFM {
         format: String = "json"
     ) {
         contentType(ContentType.Application.FormUrlEncoded)
-        userAgent("flex-player (https://github.com/flex-playerGroup/flex-player)")
+        userAgent("flex-player (https://github.com/flex_playerGroup/flex-player)")
         val paramsForSig = mutableMapOf(
             "method" to method,
             "api_key" to apiKey

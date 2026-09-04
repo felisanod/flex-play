@@ -6,9 +6,9 @@
         android:shortcutId="search"
         android:shortcutShortLabel="@string/search">
         <intent
-            android:action="com.flex-player.music.action.SEARCH"
-            android:targetClass="com.flex-player.music.MainActivity"
-            android:targetPackage="com.flex-player.music" />
+            android:action="com.flexplayer.music.action.SEARCH"
+            android:targetClass="com.flexplayer.music.MainActivity"
+            android:targetPackage="com.flexplayer.music" />
     </shortcut>
     <shortcut
         android:enabled="true"
@@ -16,8 +16,8 @@
         android:shortcutId="library"
         android:shortcutShortLabel="@string/filter_library">
         <intent
-            android:action="com.flex-player.music.action.LIBRARY"
-            android:targetClass="com.flex-player.music.MainActivity"
-            android:targetPackage="com.flex-player.music" />
+            android:action="com.flexplayer.music.action.LIBRARY"
+            android:targetClass="com.flexplayer.music.MainActivity"
+            android:targetPackage="com.flexplayer.music" />
     </shortcut>
 </shortcuts>

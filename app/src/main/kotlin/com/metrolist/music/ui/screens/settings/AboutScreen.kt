@@ -119,8 +119,8 @@ private val collaborators = listOf(
 private val communityLinks = listOf(
     CommunityLink(R.string.credits_discord, R.drawable.discord, "https://discord.com/invite/zrdbeRG2Mt"),
     CommunityLink(R.string.credits_telegram, R.drawable.telegram, "https://t.me/flex-playerapp"),
-    CommunityLink(R.string.credits_view_repo, R.drawable.github, "https://github.com/flex-playerGroup/flex-player"),
-    CommunityLink(R.string.credits_license_name, R.drawable.info, "https://github.com/flex-playerGroup/flex-player/blob/main/LICENSE")
+    CommunityLink(R.string.credits_view_repo, R.drawable.github, "https://github.com/flex_playerGroup/flex-player"),
+    CommunityLink(R.string.credits_license_name, R.drawable.info, "https://github.com/flex_playerGroup/flex-player/blob/main/LICENSE")
 )
 
 private fun handleEasterEggClick(
@@ -270,7 +270,7 @@ fun AboutScreen(
                         .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
 
                     Text(
-                        text = flex-playerName,
+                        text = flexPlayerName,
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Black,
                         color = MaterialTheme.colorScheme.onSurface,

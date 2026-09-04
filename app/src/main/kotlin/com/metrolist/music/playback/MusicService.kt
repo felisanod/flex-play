@@ -216,7 +216,7 @@ import com.flexplayer.music.utils.InnerTubeXPlayer
 import com.flexplayer.music.utils.dataStore
 import com.flexplayer.music.utils.get
 import com.flexplayer.music.utils.reportException
-import com.flexplayer.music.widget.flex-playerWidgetManager
+import com.flexplayer.music.widget.flexPlayerWidgetManager
 import com.flexplayer.music.widget.MusicWidgetReceiver
 import com.flexplayer.music.widget.PlaylistWidgetReceiver
 import com.flexplayer.music.ui.utils.resize
@@ -289,7 +289,7 @@ class MusicService :
     lateinit var eqProfileRepository: EQProfileRepository
 
     @Inject
-    lateinit var widgetManager: flex-playerWidgetManager
+    lateinit var widgetManager: flexPlayerWidgetManager
 
     @Inject
     lateinit var listenTogetherManager: com.flexplayer.music.listentogether.ListenTogetherManager

@@ -67,7 +67,7 @@ object OpenRouterStreamingService {
                         .apply {
                             if (apiKey.isNotBlank()) addHeader("Authorization", "Bearer ${apiKey.trim()}")
                         }.addHeader("Content-Type", "application/json")
-                        .addHeader("HTTP-Referer", "https://github.com/flex-playerGroup/flex-player")
+                        .addHeader("HTTP-Referer", "https://github.com/flex_playerGroup/flex-player")
                         .addHeader("X-Title", "flex-player")
                         .post(body.toString().toRequestBody(jsonMediaType))
                         .build()

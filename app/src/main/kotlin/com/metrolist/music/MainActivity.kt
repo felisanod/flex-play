@@ -194,7 +194,7 @@ import com.flexplayer.music.ui.screens.settings.DarkMode
 import com.flexplayer.music.ui.screens.settings.NavigationTab
 import com.flexplayer.music.ui.theme.ColorSaver
 import com.flexplayer.music.ui.theme.DefaultThemeColor
-import com.flexplayer.music.ui.theme.flex-playerTheme
+import com.flexplayer.music.ui.theme.flexPlayerTheme
 import com.flexplayer.music.ui.theme.extractThemeColor
 import com.flexplayer.music.ui.utils.appBarScrollBehavior
 import com.flexplayer.music.ui.utils.resetHeightOffset
@@ -462,7 +462,7 @@ class MainActivity : FragmentActivity() {
         }
 
         setContent {
-            flex-playerApp(
+            flexPlayerApp(
                 latestVersionName = latestVersionName,
                 onLatestVersionNameChange = { latestVersionName = it },
                 playerConnection = playerConnectionSnapshot,
@@ -476,7 +476,7 @@ class MainActivity : FragmentActivity() {
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
-    private fun flex-playerApp(
+    private fun flexPlayerApp(
         latestVersionName: String,
         onLatestVersionNameChange: (String) -> Unit,
         playerConnection: PlayerConnection?,
@@ -654,7 +654,7 @@ class MainActivity : FragmentActivity() {
                 }
         }
 
-        flex-playerTheme(
+        flexPlayerTheme(
             darkTheme = useDarkTheme,
             pureBlack = pureBlack,
             themeColor = themeColor,

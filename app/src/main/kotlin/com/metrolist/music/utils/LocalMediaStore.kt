@@ -25,7 +25,7 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 
 object LocalMediaStore {
-    private const val flex-player_DIRECTORY = "flex-player/Music"
+    private const val flex_player_DIRECTORY = "flex-player/Music"
 
     suspend fun saveDownloadedFile(
         context: Context,
@@ -44,9 +44,9 @@ object LocalMediaStore {
             }
 
             val relativePath = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                Environment.DIRECTORY_MUSIC + "/$flex-player_DIRECTORY"
+                Environment.DIRECTORY_MUSIC + "/$flex_player_DIRECTORY"
             } else {
-                Environment.DIRECTORY_MUSIC + "/$flex-player_DIRECTORY"
+                Environment.DIRECTORY_MUSIC + "/$flex_player_DIRECTORY"
             }
 
             val fileName = "$displayName.${mimeType.substringAfterLast("/").substringAfterLast(";")}"
@@ -119,7 +119,7 @@ object LocalMediaStore {
         val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         val projection = arrayOf(MediaStore.Audio.Media._ID)
         val selection = "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ?"
-        val selectionArgs = arrayOf("%$flex-player_DIRECTORY%")
+        val selectionArgs = arrayOf("%$flex_player_DIRECTORY%")
 
         context.contentResolver.query(
             collection,
