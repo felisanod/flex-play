@@ -21,6 +21,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -74,8 +76,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -336,7 +340,60 @@ fun BottomSheetPlayer(
         state = state,
         modifier = modifier,
         background = {
-            Box(modifier = Modifier.fillMaxSize().background(SoftBg))
+            Box(modifier = Modifier.fillMaxSize().background(SoftBg).graphicsLayer { if (showInlineLyrics) renderEffect = BlurEffect(16f, 16f, TileMode.Clamp) }) {
+                val artworkUrl = mediaMetadata?.thumbnailUrl
+                val artworkData = if (!hidePlayerThumbnail && artworkUrl != null) artworkUrl else R.drawable.default_cover
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(artworkData)
+                        .crossfade(true)
+                        .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        alignment = Alignment.TopCenter,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                alpha = 0.85f
+                            },
+                    )
+
+                // Layer 1: Top Frosted Vignette (0dp to ~200dp)
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                0.0f to SoftBg.copy(alpha = 0.94f),
+                                0.45f to SoftBg.copy(alpha = 0.78f),
+                                0.75f to SoftBg.copy(alpha = 0.35f),
+                                1.0f to Color.Transparent,
+                            ),
+                        )
+                            .graphicsLayer {
+                                if (!hidePlayerThumbnail || artworkData == R.drawable.default_cover) alpha = 1f
+                            },
+                )
+
+                // Layer 2: Bottom Frosted Dissolve (from ~360dp to bottom)
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 360.dp)
+                        .fillMaxHeight()
+                        .background(
+                            Brush.verticalGradient(
+                                0.00f to Color.Transparent,
+                                0.25f to SoftBg.copy(alpha = 0.40f),
+                                0.50f to SoftBg.copy(alpha = 0.82f),
+                                0.72f to SoftBg.copy(alpha = 0.98f),
+                                0.85f to SoftBg,
+                                1.00f to SoftBg,
+                            ),
+                        ),
+                )
+            }
         },
         onDismiss = if (!isListenTogetherGuest) ({
             playerConnection.service.clearAutomix()
@@ -392,9 +449,31 @@ fun BottomSheetPlayer(
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
                 val progress = if (duration > 0) (sliderPosition ?: effectivePosition).toFloat() / duration.toFloat() else 0f
                 Box(
-                    modifier = Modifier.fillMaxWidth().height(8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(16.dp)
                         .neumorphic(shape = RoundedCornerShape(50), isPressed = true, shadowRadius = 2.dp)
                         .background(Color(0xFFE8EDF5), RoundedCornerShape(50))
+                        .pointerInput(duration) {
+                            detectDragGestures(
+                                onDragStart = { offset ->
+                                    sliderPosition = (offset.x / size.width.toFloat() * duration.coerceAtLeast(1L).toFloat()).toLong().coerceIn(0L, duration)
+                                },
+                                onDrag = { change, _ ->
+                                    sliderPosition = (change.position.x / size.width.toFloat() * duration.coerceAtLeast(1L).toFloat()).toLong().coerceIn(0L, duration)
+                                },
+                                onDragEnd = {
+                                    sliderPosition?.let { pos ->
+                                        val offset = currentSong?.song?.lyricsOffset?.toLong() ?: 0L
+                                        playerConnection.player.seekTo(pos - offset)
+                                    }
+                                    sliderPosition = null
+                                },
+                                onDragCancel = {
+                                    sliderPosition = null
+                                },
+                            )
+                        }
                 ) {
                     Box(modifier = Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).fillMaxHeight().background(BlueAccent, RoundedCornerShape(50)))
                 }
@@ -603,18 +682,11 @@ fun BottomSheetPlayer(
                     enter = fadeIn(),
                     exit = fadeOut()
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(32.dp),
-                        color = Color.White.copy(alpha = 0.8f),
-                        shadowElevation = 8.dp,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        InlineLyricsView(
-                            mediaMetadata = mediaMetadata,
-                            showLyrics = true,
-                            positionProvider = { effectivePosition }
-                        )
-                    }
+                    InlineLyricsView(
+                        mediaMetadata = mediaMetadata,
+                        showLyrics = true,
+                        positionProvider = { effectivePosition }
+                    )
                 }
             }
 

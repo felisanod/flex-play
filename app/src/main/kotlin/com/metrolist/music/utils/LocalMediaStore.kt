@@ -6,6 +6,7 @@
 package com.flexplayer.music.utils
 
 import android.content.ContentResolver
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.media.MediaMetadataRetriever
@@ -18,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.time.LocalDateTime
 import java.time.ZoneOffset
@@ -163,8 +165,44 @@ object LocalMediaStore {
 
         contentValues.clear()
         contentValues.put(MediaStore.Audio.Media.IS_PENDING, 0)
+        // Embed cover artwork into MediaStore if available
+        metadata.artworkFile?.let { artwork ->
+            if (artwork.exists()) {
+                putAlbumArt(contentResolver, uri, artwork)
+            }
+        }
         contentResolver.update(uri, contentValues, null, null)
         return uri
+    }
+
+    private fun putAlbumArt(contentResolver: ContentResolver, audioUri: Uri, artwork: File) {
+        try {
+            val albumId = getAlbumId(contentResolver, audioUri)
+            if (albumId != null) {
+                val albumUri = ContentUris.withAppendedId(
+                    MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI,
+                    albumId,
+                )
+                contentResolver.openOutputStream(albumUri)?.use { out ->
+                    FileInputStream(artwork).use { input -> input.copyTo(out) }
+                }
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).w(e, "Failed to set album art for $audioUri")
+        }
+    }
+
+    private fun getAlbumId(contentResolver: ContentResolver, audioUri: Uri): Long? {
+        return try {
+            val projection = arrayOf(MediaStore.Audio.Media.ALBUM_ID)
+            contentResolver.query(audioUri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID))
+                } else null
+            }
+        } catch (e: Exception) {
+            null
+        }
     }
 
     private fun saveToLegacyFile(
@@ -314,4 +352,5 @@ data class LocalMediaMetadata(
     val album: String?,
     val duration: Int?,
     val thumbnailPath: String?,
+    val artworkFile: File? = null,
 )

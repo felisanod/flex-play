@@ -7,8 +7,8 @@
                 android:angle="0"
                 android:startColor="#00000000"
                 android:centerColor="#00000000"
-                android:centerX="0.48"
-                android:endColor="@color/neo_surface" />
+                android:centerX="0.36"
+                android:endColor="@color/neo_bg" />
         </shape>
     </item>
 </layer-list>

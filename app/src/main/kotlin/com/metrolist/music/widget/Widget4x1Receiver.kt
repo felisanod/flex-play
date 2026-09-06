@@ -9,10 +9,19 @@ import android.content.Context
 import android.widget.RemoteViews
 import com.flexplayer.music.R
 
+/**
+ * 4x1 Neomorphic Home Screen Music Widget
+ * 
+ * Design per Engineering Specification:
+ * - Soft cool off-white surface (#f6f9ff)
+ * - Album artwork full-bleed left -> dissolves into surface by 52% width
+ * - Top row: Title + Artist | Like (top-right corner)
+ * - Middle row: Centered transport hub (Prev | Hero Play | Next)
+ * - Bottom row: Elapsed | Recessed scrubber | Total
+ */
 class Widget4x1Receiver : BaseNeoWidget() {
 
     override fun layoutId(): Int = R.layout.neo_widget_4x1
-
     override fun configureRemoteViews(
         context: Context,
         views: RemoteViews,
@@ -20,14 +29,17 @@ class Widget4x1Receiver : BaseNeoWidget() {
         widgetWidthPx: Int,
         widgetHeightPx: Int,
     ) {
-        views.setTextViewText(R.id.widget_title, state.title.ifBlank { context.getString(R.string.no_song_playing) })
-        views.setTextViewText(R.id.widget_artist, state.artist.ifBlank { context.getString(R.string.tap_to_open) })
-
-        views.setImageViewResource(
-            R.id.widget_btn_play_pause,
-            if (state.isPlaying) R.drawable.neo_ic_pause else R.drawable.neo_ic_play,
+        // --- Row 1: Title & Artist ---
+        views.setTextViewText(
+            R.id.widget_title,
+            state.title.ifBlank { context.getString(R.string.no_song_playing) }
+        )
+        views.setTextViewText(
+            R.id.widget_artist,
+            state.artist.ifBlank { "" }
         )
 
+        // --- Row 1: Like Button ---
         views.setImageViewResource(
             R.id.widget_btn_like,
             if (state.isLiked) R.drawable.neo_ic_heart else R.drawable.neo_ic_heart_outline,
@@ -35,26 +47,24 @@ class Widget4x1Receiver : BaseNeoWidget() {
         val likeTint = if (state.isLiked) 0xFFEF4444.toInt() else 0xFF64748B.toInt()
         views.setInt(R.id.widget_btn_like, "setColorFilter", likeTint)
 
+        // --- Row 2: Transport Controls ---
         views.setImageViewResource(
-            R.id.widget_btn_repeat,
-            if (state.isRepeatOne) R.drawable.neo_ic_repeat_active else R.drawable.neo_ic_repeat,
+            R.id.widget_btn_play_pause,
+            if (state.isPlaying) R.drawable.neo_ic_pause else R.drawable.neo_ic_play,
         )
-        val repeatTint = if (state.isRepeatOne) 0xFF2563EB.toInt() else 0xFF64748B.toInt()
-        views.setInt(R.id.widget_btn_repeat, "setColorFilter", repeatTint)
-
+        // --- Row 3: Progress & Timestamps ---
         val safeDuration = state.durationMs.coerceAtLeast(1L)
         val progress = ((state.positionMs.toDouble() / safeDuration.toDouble()) * 100).toInt()
             .coerceIn(0, 100)
-        
-        views.setProgressBar(
-            R.id.widget_progress,
-            100,
-            progress,
-            false
-        )
-        views.setTextViewText(R.id.widget_time, formatTime(state.positionMs))
 
-        val playPauseAction = if (state.isPlaying) "pause" else "play"
+        // Hidden progress bar for calculation (layout uses custom track)
+        views.setProgressBar(R.id.widget_progress, 100, progress, false)
+        
+        // Timestamps
+        views.setTextViewText(R.id.widget_time_elapsed, formatTime(state.positionMs))
+        views.setTextViewText(R.id.widget_time_total, formatTime(state.durationMs))
+
+        // --- Click Intents ---
         views.setOnClickPendingIntent(
             R.id.widget_btn_play_pause,
             pendingServiceIntent(context, flexPlayerWidgetManager.ACTION_PLAY_PAUSE, 101),
@@ -71,11 +81,7 @@ class Widget4x1Receiver : BaseNeoWidget() {
             R.id.widget_btn_like,
             pendingServiceIntent(context, flexPlayerWidgetManager.ACTION_LIKE, 104),
         )
-        views.setOnClickPendingIntent(
-            R.id.widget_btn_repeat,
-            pendingServiceIntent(context, flexPlayerWidgetManager.ACTION_REPEAT, 105),
-        )
-
+        // Open app when tapping title, artist, or artwork
         val clickableTargets = intArrayOf(
             R.id.widget_title,
             R.id.widget_artist,

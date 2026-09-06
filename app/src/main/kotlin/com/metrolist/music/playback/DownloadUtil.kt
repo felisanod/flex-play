@@ -24,6 +24,9 @@ import androidx.media3.exoplayer.offline.DownloadService
 import coil3.imageLoader
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import coil3.toBitmap
+import android.graphics.Bitmap
 import com.flexplayer.innertube.YouTube
 import com.flexplayer.innertube.models.SongItem
 import com.metrolist.innertubex.extraction.ContentHints
@@ -56,6 +59,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -427,12 +431,16 @@ constructor(
         // visible to other apps.
         val mimeType = formatEntity.mimeType ?: "audio/mpeg"
 
+        // Download cover artwork for embedding
+        val artworkFile = downloadArtwork(songId, song.thumbnailUrl, song.title)
+
         val metadata = LocalMediaMetadata(
             title = song.title,
             artist = song.artists.joinToString(", ") { it.name }.ifBlank { null },
             album = song.album?.title,
             duration = song.song.duration.takeIf { it > 0 },
             thumbnailPath = song.thumbnailUrl,
+            artworkFile = artworkFile,
         )
 
         val cacheDataSourceFactory = CacheDataSource
@@ -499,6 +507,33 @@ constructor(
     private fun removeFromPlayerCache(songId: String) {
         runCatching { playerCache.removeResource(songId) }
             .onFailure { Timber.tag(TAG).w(it, "Failed to remove downloaded song $songId from player cache") }
+    }
+
+    private suspend fun downloadArtwork(songId: String, artworkUrl: String?, songTitle: String?): File? {
+        if (artworkUrl == null || artworkUrl.isBlank()) return null
+        return withContext(Dispatchers.IO) {
+            try {
+                val request = ImageRequest.Builder(context)
+                    .data(artworkUrl)
+                    .size(512, 512)
+                    .build()
+                val result = context.imageLoader.execute(request)
+                if (result !is SuccessResult) {
+                    Timber.tag(TAG).w("Failed to download artwork for $songId")
+                    return@withContext null
+                }
+                val bitmap = result.image.toBitmap()
+                val safeTitle = songTitle?.replace(Regex("[\\\\/:*?\"<>|\\u0000-\\u001F]"), "_")?.trim()?.takeIf { it.isNotBlank() } ?: "cover_$songId"
+                val artworkFile = File(context.cacheDir, "artwork_${safeTitle}.jpg")
+                artworkFile.outputStream().use { fos ->
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 90, fos)
+                }
+                artworkFile
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "Failed to download artwork for $songId")
+                null
+            }
+        }
     }
 
     private fun Throwable?.isExpiredStreamError(): Boolean {

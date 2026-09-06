@@ -1,22 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Recessed Scrubber Groove Well + Progress Fill
+    - Background: recessed well (neo_well #E8EEF6)
+    - Progress: electric blue gradient
+    - Fully rounded pill (9999dp radius)
+-->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Background track -->
     <item android:id="@android:id/background">
         <shape android:shape="rectangle">
-            <corners android:radius="6dp" />
-            <solid android:color="@color/neo_track_bg" />
+            <corners android:radius="9999dp" />
+            <solid android:color="@color/neo_well" />
         </shape>
     </item>
-
-    <!-- Progress fill -->
     <item android:id="@android:id/progress">
         <clip>
             <shape android:shape="rectangle">
-                <corners android:radius="6dp" />
+                <corners android:radius="9999dp" />
                 <gradient
                     android:startColor="@color/neo_accent"
-                    android:endColor="@color/neo_accent_light"
-                    android:type="linear" />
+                    android:endColor="@color/neo_accent_dark"
+                    android:angle="0" />
             </shape>
         </clip>
     </item>

@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="neo_bg">#E8EDF5</color>
+    <color name="neo_bg">#F6F9FF</color>
     <color name="neo_bg_dark">#2A323D</color>
     <color name="neo_surface">#F6F9FF</color>
+    <color name="neo_well">#E8EEF6</color>
+    <color name="neo_well_pressed">#EDF2F9</color>
     <color name="neo_text_primary">#1E293B</color>
     <color name="neo_text_secondary">#64748B</color>
     <color name="neo_text_muted">#94A3B8</color>
@@ -12,9 +14,9 @@
     <color name="neo_accent_light">#60A5FA</color>
     <color name="neo_like_active">#EF4444</color>
     <color name="neo_shadow_light">#FFFFFFFF</color>
-    <color name="neo_shadow_dark">#A6A6B4C8</color>
+    <color name="neo_shadow_dark">#A3B1C6</color>
     <color name="neo_shadow_dark_strong">#D9A6B4C8</color>
-    <color name="neo_track_bg">#DBE3EC</color>
+    <color name="neo_track_bg">#E8EEF6</color>
     <color name="neo_border">#66FFFFFF</color>
     <color name="neo_border_subtle">#80FFFFFF</color>
     <color name="white">#FFFFFFFF</color>

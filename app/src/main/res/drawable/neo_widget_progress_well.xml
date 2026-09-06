@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Recessed Scrubber Groove Well per Engineering Spec
+    - Inset shadows (concave): 1-2px white (top-left) + 1-2px slate (bottom-right)
+    - Background: neo_well (#e8eef6)
+    - 4dp height, 9999dp radius (fully rounded pill)
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="9999dp" />
+            <solid android:color="@color/neo_well" />
+        </shape>
+    </item>
+</layer-list>

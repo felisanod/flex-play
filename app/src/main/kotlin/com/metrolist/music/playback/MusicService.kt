@@ -12,7 +12,6 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.graphics.Bitmap
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -35,8 +34,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
-import android.widget.RemoteViews
-import com.flexplayer.music.widget.AlbumArtRenderer
 import androidx.core.app.NotificationCompat
 import androidx.datastore.preferences.core.Preferences
 import androidx.core.app.ServiceCompat
@@ -460,14 +457,7 @@ class MusicService :
     }
     private var lastPlaybackSpeed = 1.0f
 
-    @Volatile
-    private var latestMediaNotification: Notification? = null
-
     private var scrobbleManager: ScrobbleManager? = null
-
-    private lateinit var notificationManager: NotificationManager
-    private var artworkBitmap: Bitmap? = null
-    private var currentArtworkUri: String? = null
 
     val automixItems = MutableStateFlow<List<MediaItem>>(emptyList())
 
@@ -485,9 +475,6 @@ class MusicService :
     // leaving the player "prepared but paused" forever.
     private var pausedDueToNetworkError = false
     private var silenceSkipJob: Job? = null
-    private var notificationUpdateJob: Job? = null
-    private var lastNotificationCallback: MediaNotification.Provider.Callback? = null
-    private var lastActionFactory: MediaNotification.ActionFactory? = null
 
     // Cached preferences to avoid runBlocking DataStore reads in hot paths
     @Volatile
@@ -617,14 +604,30 @@ class MusicService :
 
         playerInitialized.value = false
 
-        // Call startForeground() as early as possible to satisfy the
-        // 5-second timeout imposed by Context.startForegroundService().
-        // On some OEMs (e.g. MIUI), even a DataStore read can be slow
-        // enough to miss the window, so we promote before any I/O.
+        // Create the notification channel for the Media3 MediaStyle notification.
         ensureForegroundChannelExists()
-        notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (!ensureStartedAsForegroundOrStop()) {
-            return
+        // Use the default Media3 MediaStyle notification with our high-importance channel
+        setMediaNotificationProvider(
+            DefaultMediaNotificationProvider
+                .Builder(this)
+                .setChannelId(CHANNEL_ID)
+                .setNotificationId(NOTIFICATION_ID)
+                .build(),
+        )
+
+        // Satisfy the 5-second startForegroundService() requirement immediately.
+        // Media3 will replace this with the real media notification once the
+        // player and MediaSession are ready.
+        try {
+            startForeground(
+                NOTIFICATION_ID,
+                createPlaceholderNotification(),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
+            )
+        } catch (e: ForegroundServiceStartNotAllowedException) {
+            Timber.tag(TAG).w(e, "Foreground start not allowed yet; will be promoted by MediaSessionService when eligible")
+        } catch (e: Exception) {
+            Timber.tag(TAG).w(e, "Failed to promote to foreground early; MediaSessionService will handle it")
         }
 
         // Read ALL startup preferences in one shot so that subsequent code
@@ -824,7 +827,6 @@ class MusicService :
 
         currentSong.debounce(1000).collect(scope) { song ->
             updateNotification()
-            updateNotificationManual()
             updateWidgetUI(player.isPlaying)
         }
 
@@ -1533,111 +1535,6 @@ class MusicService :
 
     private fun stopOnError() {
         player.pause()
-    }
-
-    private fun startNotificationUpdateLoop() {
-        if (notificationUpdateJob != null) return
-        notificationUpdateJob = scope.launch(Dispatchers.Main) {
-            while (isActive) {
-                if (player.isPlaying) {
-                    updateNotificationManual()
-                }
-                delay(1000L)
-            }
-        }
-    }
-
-    private fun stopNotificationUpdateLoop() {
-        notificationUpdateJob?.cancel()
-        notificationUpdateJob = null
-    }
-
-    private fun updateNotificationManual() {
-        if (!::player.isInitialized) return
-        val metadata = player.mediaMetadata
-        val isPlaying = player.isPlaying
-        val isLiked = currentSong.value?.song?.let { if (it.isEpisode) it.inLibrary != null else it.liked } ?: false
-
-        val remoteViews = RemoteViews(packageName, R.layout.notification_neo)
-        remoteViews.setTextViewText(R.id.notification_title, metadata.title ?: getString(R.string.no_song_playing))
-        remoteViews.setTextViewText(R.id.notification_artist, metadata.artist ?: "")
-        
-        remoteViews.setImageViewResource(
-            R.id.notification_btn_play_pause,
-            if (isPlaying) R.drawable.neo_ic_pause else R.drawable.neo_ic_play
-        )
-        remoteViews.setImageViewResource(
-            R.id.notification_btn_like,
-            if (isLiked) R.drawable.neo_ic_heart else R.drawable.neo_ic_heart_outline
-        )
-
-        // Progress
-        val duration = player.duration
-        val position = player.currentPosition
-        if (duration > 0) {
-            remoteViews.setProgressBar(R.id.notification_progress, 1000, ((position.toDouble() / duration.toDouble()) * 1000).toInt(), false)
-            remoteViews.setTextViewText(R.id.notification_time_curr, com.flexplayer.music.utils.makeTimeString(position))
-            remoteViews.setTextViewText(R.id.notification_time_total, com.flexplayer.music.utils.makeTimeString(duration))
-        } else {
-            remoteViews.setProgressBar(R.id.notification_progress, 1000, 0, false)
-            remoteViews.setTextViewText(R.id.notification_time_curr, "0:00")
-            remoteViews.setTextViewText(R.id.notification_time_total, "0:00")
-        }
-
-        // Button Intents
-        val playPauseIntent = Intent(this, MusicService::class.java).apply { action = flexPlayerWidgetManager.ACTION_PLAY_PAUSE }
-        remoteViews.setOnClickPendingIntent(R.id.notification_btn_play_pause, PendingIntent.getService(this, 300, playPauseIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
-
-        val prevIntent = Intent(this, MusicService::class.java).apply { action = flexPlayerWidgetManager.ACTION_PREV }
-        remoteViews.setOnClickPendingIntent(R.id.notification_btn_prev, PendingIntent.getService(this, 301, prevIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
-
-        val nextIntent = Intent(this, MusicService::class.java).apply { action = flexPlayerWidgetManager.ACTION_NEXT }
-        remoteViews.setOnClickPendingIntent(R.id.notification_btn_next, PendingIntent.getService(this, 302, nextIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
-
-        val likeIntent = Intent(this, MusicService::class.java).apply { action = flexPlayerWidgetManager.ACTION_LIKE }
-        remoteViews.setOnClickPendingIntent(R.id.notification_btn_like, PendingIntent.getService(this, 303, likeIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
-
-        // Content intent
-        val contentIntent = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-
-        // Artwork
-        val artworkUri = metadata.artworkUri?.toString()
-        if (artworkUri != currentArtworkUri) {
-            currentArtworkUri = artworkUri
-            scope.launch {
-                artworkBitmap = runCatching {
-                    AlbumArtRenderer.loadFaded(this@MusicService, artworkUri, 400, 400)
-                }.getOrNull()
-                updateNotificationManual()
-            }
-        }
-        if (artworkBitmap != null) {
-            remoteViews.setImageViewBitmap(R.id.notification_artwork, artworkBitmap)
-        } else {
-            remoteViews.setImageViewResource(R.id.notification_artwork, R.drawable.default_cover)
-        }
-
-        val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.small_icon)
-            .setCustomContentView(remoteViews)
-            .setCustomBigContentView(remoteViews)
-            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
-            .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setContentIntent(contentIntent)
-            .setOngoing(isPlaying)
-
-        val notification = notificationBuilder.build()
-        latestMediaNotification = notification
-
-        if (isPlaying) {
-            startForegroundSafely(notification, "Foreground service start denied", "Failed to enter foreground")
-            startNotificationUpdateLoop()
-        } else {
-            notificationManager.notify(NOTIFICATION_ID, notification)
-            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
-            stopNotificationUpdateLoop()
-        }
     }
 
     private fun updateNotification(isLiked: Boolean? = currentSong.value?.song?.let { if (it.isEpisode) it.inLibrary != null else it.liked }) {
@@ -2571,7 +2468,6 @@ class MusicService :
         lastPlaybackSpeed = -1.0f // force update song
 
         setupAudioNormalization()
-        updateNotificationManual()
 
         scrobbleManager?.onSongStop()
         if (player.playWhenReady && player.playbackState == Player.STATE_READY) {
@@ -2675,7 +2571,6 @@ class MusicService :
                 Timber.tag(TAG).d("Playback successful for $mediaId, reset retry count")
             }
             scheduleCrossfade()
-            updateNotificationManual()
         }
 
         if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
@@ -2714,7 +2609,6 @@ class MusicService :
         if (playWhenReady) {
             applyCachedAudioNormalizationNow()
         }
-        updateNotificationManual()
 
         updateInitialBufferRecovery(player.playbackState)
     }
@@ -4164,33 +4058,6 @@ class MusicService :
         }
     }
 
-    /**
-     * [Context.startForegroundService] requires [startForeground] to succeed quickly. If we cannot
-     * enter the foreground state, stop immediately so the system does not ANR the app process.
-     */
-    private fun ensureStartedAsForegroundOrStop(): Boolean =
-        startForegroundSafely(
-            notification = createFallbackForegroundNotification(),
-            deniedMessage = "Foreground service start not allowed; stopping service to avoid ANR",
-            failureMessage = "Failed to enter foreground; stopping service to avoid ANR",
-        )
-
-    private fun ensureForegroundWithLatestNotificationOrStop(): Boolean =
-        startForegroundSafely(
-            notification = latestMediaNotification ?: createFallbackForegroundNotification(),
-            deniedMessage = "Foreground promotion denied during notification update; stopping service",
-            failureMessage = "Failed to promote service during notification update; stopping service",
-            stopOnFailure = true,
-        )
-
-    private fun tryEnsureForegroundWithLatestNotification(): Boolean =
-        startForegroundSafely(
-            notification = latestMediaNotification ?: createFallbackForegroundNotification(),
-            deniedMessage = "Foreground promotion denied during notification update",
-            failureMessage = "Failed to promote service during notification update",
-            stopOnFailure = false,
-        )
-
     private fun ensureForegroundChannelExists() {
         val nm = getSystemService(NotificationManager::class.java)
         nm?.createNotificationChannel(
@@ -4207,17 +4074,14 @@ class MusicService :
         )
     }
 
-    private fun createFallbackForegroundNotification(): Notification {
-        ensureForegroundChannelExists()
-        val pending =
-            PendingIntent.getActivity(
-                this,
-                0,
-                Intent(this, MainActivity::class.java),
-                PendingIntent.FLAG_IMMUTABLE,
-            )
-        return NotificationCompat
-            .Builder(this, CHANNEL_ID)
+    private fun createPlaceholderNotification(): Notification {
+        val pending = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE,
+        )
+        return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.music_player))
             .setContentText("")
             .setSmallIcon(R.drawable.small_icon)
@@ -4225,38 +4089,6 @@ class MusicService :
             .setOngoing(true)
             .build()
     }
-
-    private fun startForegroundSafely(
-        notification: Notification,
-        deniedMessage: String,
-        failureMessage: String,
-        stopOnFailure: Boolean = true,
-    ): Boolean =
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(
-                    NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
-                )
-            } else {
-                startForeground(NOTIFICATION_ID, notification)
-            }
-            true
-        } catch (e: ForegroundServiceStartNotAllowedException) {
-            Timber.tag(TAG).w(e, deniedMessage)
-            if (stopOnFailure) {
-                stopSelf()
-            }
-            false
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, failureMessage)
-            reportException(e)
-            if (stopOnFailure) {
-                stopSelf()
-            }
-            false
-        }
 
     override fun onDestroy() {
         isRunning = false
@@ -4356,13 +4188,6 @@ class MusicService :
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = mediaSession
 
-    override fun onUpdateNotification(
-        session: MediaSession,
-        startInForegroundRequired: Boolean,
-    ) {
-        // Do nothing to let our manual updateNotificationManual() handle everything
-    }
-
     override fun onStartCommand(
         intent: Intent?,
         flags: Int,
@@ -4370,11 +4195,8 @@ class MusicService :
     ): Int {
         val isNotificationDismissal =
             intent?.getBooleanExtra(MediaNotification.NOTIFICATION_DISMISSED_EVENT_KEY, false) == true
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !isNotificationDismissal) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             ensureForegroundChannelExists()
-            if (!ensureStartedAsForegroundOrStop()) {
-                return START_NOT_STICKY
-            }
         }
 
         when (intent?.action) {
@@ -4384,24 +4206,24 @@ class MusicService :
 
             flexPlayerWidgetManager.ACTION_PLAY_PAUSE -> {
                 if (player.isPlaying) player.pause() else player.play()
-                updateNotificationManual()
+                updateNotification()
                 updateWidgetUI(player.isPlaying)
             }
 
             flexPlayerWidgetManager.ACTION_LIKE -> {
                 toggleLike()
-                updateNotificationManual()
+                updateNotification()
             }
 
             flexPlayerWidgetManager.ACTION_NEXT -> {
                 player.seekToNext()
-                updateNotificationManual()
+                updateNotification()
                 updateWidgetUI(player.isPlaying)
             }
 
             flexPlayerWidgetManager.ACTION_PREV -> {
                 player.seekToPrevious()
-                updateNotificationManual()
+                updateNotification()
                 updateWidgetUI(player.isPlaying)
             }
 
@@ -4412,7 +4234,7 @@ class MusicService :
                     Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
                     else -> Player.REPEAT_MODE_OFF
                 }
-                updateNotificationManual()
+                updateNotification()
                 updateWidgetUI(player.isPlaying)
             }
 
@@ -4527,10 +4349,6 @@ class MusicService :
             Timber.tag(TAG).w("Foreground service start denied by MediaSessionService listener")
         }
 
-        if (tryEnsureForegroundWithLatestNotification()) {
-            return
-        }
-
         if (!::player.isInitialized) {
             stopSelf()
             return
@@ -4548,10 +4366,6 @@ class MusicService :
             stopSelf()
         }
     }
-
-    private fun isForegroundServiceStartNotAllowedException(error: IllegalStateException): Boolean =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            error.javaClass.name == ForegroundServiceStartNotAllowedException::class.java.name
 
     /**
      * Updates all app widgets with current playback state

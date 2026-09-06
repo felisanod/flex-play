@@ -200,11 +200,6 @@ private fun NewMiniPlayer(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .height(84.dp)
-            .neumorphic(
-                shape = RoundedCornerShape(24.dp),
-                backgroundColor = backgroundColor,
-                shadowRadius = 12.dp
-            )
             .clip(RoundedCornerShape(24.dp))
             .background(surfaceColor)
             .clickable(onClick = onClick)
@@ -271,11 +266,6 @@ private fun NewMiniPlayer(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(6.dp)
-                        .neumorphic(
-                            shape = RoundedCornerShape(50),
-                            isPressed = true,
-                            shadowRadius = 2.dp
-                        )
                         .background(Color.Black.copy(alpha = 0.05f), RoundedCornerShape(50))
                 ) {
                     Box(
