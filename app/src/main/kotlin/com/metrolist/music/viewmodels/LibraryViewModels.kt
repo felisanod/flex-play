@@ -48,6 +48,7 @@ import com.flexplayer.music.extensions.matchesNormalizedQuery
 import com.flexplayer.music.extensions.normalizeForSearch
 import com.flexplayer.music.extensions.toEnum
 import com.flexplayer.music.playback.DownloadUtil
+import com.flexplayer.music.utils.LocalMediaScanner
 import com.flexplayer.music.utils.PodcastRefreshTrigger
 import com.flexplayer.music.utils.SyncUtils
 import com.flexplayer.music.utils.dataStore
@@ -406,7 +407,14 @@ constructor(
             database.playlists(PlaylistSortType.CREATE_DATE, true).map { it.filterYoutubeShorts(hideYoutubeShorts) }
         }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+    val localMedia = database.localMediaSongs()
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
     init {
+        viewModelScope.launch(Dispatchers.IO) {
+            LocalMediaScanner.removeMissingFiles(context, database)
+            LocalMediaScanner.scanLocalMedia(context, database)
+        }
         viewModelScope.launch(Dispatchers.IO) {
             albums.collect { albums ->
                 albums

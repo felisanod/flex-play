@@ -127,7 +127,8 @@ object LocalMediaScanner {
     }
 
     suspend fun removeMissingFiles(context: Context, database: MusicDatabase): Int = withContext(Dispatchers.IO) {
-        val deletedCount = database.localMediaSongs().first().count { localMedia ->
+        val allLocalMedia = database.localMediaSongs().first()
+        val missingEntries = allLocalMedia.filter { localMedia ->
             try {
                 val uri = Uri.parse(localMedia.mediaStoreUri)
                 context.contentResolver.query(
@@ -144,12 +145,15 @@ object LocalMediaScanner {
             }
         }
 
-        if (deletedCount > 0) {
-            database.clearLocalMedia()
-            Timber.tag("LocalMediaScanner").d("Removed $deletedCount missing local media items")
+        missingEntries.forEach { entry ->
+            database.deleteLocalMedia(entry.songId)
         }
 
-        deletedCount
+        if (missingEntries.isNotEmpty()) {
+            Timber.tag("LocalMediaScanner").d("Removed ${missingEntries.size} missing local media items")
+        }
+
+        missingEntries.size
     }
 
     private fun generateSongId(mediaStoreUri: String): String {

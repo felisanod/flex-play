@@ -5,11 +5,18 @@
 
 package com.flexplayer.music.ui.screens.library
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,6 +57,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -79,6 +92,8 @@ import com.flexplayer.music.extensions.normalizeForSearch
 import com.flexplayer.music.extensions.toMediaItem
 import com.flexplayer.music.playback.queues.ListQueue
 import com.flexplayer.music.ui.component.ChipsRow
+import com.flexplayer.music.ui.component.NeumorphChipsRow
+import com.flexplayer.music.ui.component.NeumorphFilterChip
 import com.flexplayer.music.ui.component.DefaultDialog
 import com.flexplayer.music.ui.component.HideOnScrollFAB
 import com.flexplayer.music.ui.component.LibrarySearchEmptyPlaceholder
@@ -251,6 +266,17 @@ fun LibrarySongsScreen(
 
     val lazyListState = rememberLazyListState()
 
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val dotAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dotAlpha"
+    )
+
     val backStackEntry by navController.currentBackStackEntryAsState()
     val scrollToTop =
         backStackEntry?.savedStateHandle?.getStateFlow("scrollToTop", false)?.collectAsStateWithLifecycle()
@@ -329,25 +355,52 @@ fun LibrarySongsScreen(
             contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues(),
         ) {
             item(
+                key = "title",
+                contentType = CONTENT_TYPE_HEADER,
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF3B82F6).copy(alpha = dotAlpha))
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "● LOCAL & CLOUD VAULT",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFF3B82F6),
+                                letterSpacing = 0.5.sp
+                            )
+                        )
+                    }
+                    Text(
+                        text = "Music Library",
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF1E293B)
+                        )
+                    )
+                }
+            }
+
+            item(
                 key = "filter",
                 contentType = CONTENT_TYPE_HEADER,
             ) {
-                Row {
+                Row(modifier = Modifier.padding(vertical = 8.dp)) {
                     Spacer(Modifier.width(12.dp))
-                    FilterChip(
-                        label = { Text(stringResource(R.string.songs)) },
+                    NeumorphFilterChip(
+                        label = stringResource(R.string.songs),
                         selected = true,
-                        colors = FilterChipDefaults.filterChipColors(containerColor = MaterialTheme.colorScheme.surface),
                         onClick = onDeselect,
-                        shape = RoundedCornerShape(16.dp),
-                        leadingIcon = {
-                            Icon(
-                                painter = painterResource(R.drawable.close),
-                                contentDescription = "",
-                            )
-                        },
+                        modifier = Modifier.padding(end = 8.dp)
                     )
-                    ChipsRow(
+                    NeumorphChipsRow(
                         chips =
                             listOf(
                                 SongFilter.LIKED to stringResource(R.string.filter_liked),

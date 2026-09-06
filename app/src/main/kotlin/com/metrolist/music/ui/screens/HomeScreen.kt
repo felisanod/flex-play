@@ -411,7 +411,7 @@ fun CommunityPlaylistCard(
                             .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.ic_widget_play),
+                        painter = painterResource(R.drawable.play),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.size(24.dp),

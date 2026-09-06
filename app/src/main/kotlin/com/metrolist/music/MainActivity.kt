@@ -211,7 +211,6 @@ import com.flexplayer.music.utils.rememberPreference
 import com.flexplayer.music.utils.reportException
 import com.flexplayer.music.utils.setAppLocale
 import com.flexplayer.music.viewmodels.HomeViewModel
-import com.flexplayer.music.widget.PlaylistWidgetReceiver
 import com.valentinilk.shimmer.LocalShimmerTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
@@ -1493,48 +1492,12 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    private sealed class WidgetTargetRoute(val route: String) {
-        data class LocalPlaylist(val id: String) : WidgetTargetRoute("local_playlist/$id")
-        data class OnlinePlaylist(val id: String) : WidgetTargetRoute("online_playlist/$id")
-        data object LikedSongs : WidgetTargetRoute("auto_playlist/liked")
-        data object DownloadedSongs : WidgetTargetRoute("auto_playlist/downloaded")
-        data class TopSongs(val limit: String) : WidgetTargetRoute("top_playlist/$limit")
-    }
-
     private fun handleWidgetTargetIntent(
         intent: Intent,
         navController: NavHostController,
     ) {
-        if (intent.action != ACTION_OPEN_WIDGET_TARGET) return
-
-        val targetType = intent.getStringExtra(EXTRA_WIDGET_TARGET_TYPE)
-        val targetId = intent.getStringExtra(EXTRA_WIDGET_TARGET_ID)
-        intent.action = null
-        intent.removeExtra(EXTRA_WIDGET_TARGET_TYPE)
-        intent.removeExtra(EXTRA_WIDGET_TARGET_ID)
-
-        val normalizedTargetId = targetId?.takeIf { it.isNotBlank() }
-
-        val targetRoute = when (targetType) {
-            PlaylistWidgetReceiver.TARGET_TYPE_LOCAL ->
-                normalizedTargetId?.let { WidgetTargetRoute.LocalPlaylist(it) }
-
-            PlaylistWidgetReceiver.TARGET_TYPE_ONLINE ->
-                normalizedTargetId?.let { WidgetTargetRoute.OnlinePlaylist(it) }
-
-            PlaylistWidgetReceiver.TARGET_TYPE_LIKED ->
-                WidgetTargetRoute.LikedSongs
-
-            PlaylistWidgetReceiver.TARGET_TYPE_DOWNLOADED ->
-                WidgetTargetRoute.DownloadedSongs
-
-            PlaylistWidgetReceiver.TARGET_TYPE_TOP ->
-                WidgetTargetRoute.TopSongs(normalizedTargetId ?: "50")
-
-            else -> null
-        } ?: return
-
-        navController.navigate(targetRoute.route)
+        // Playlist widget removed; only the now-playing widgets remain and they
+        // simply open the app, so there is nothing special to route here.
     }
 
     private fun handleDeepLinkIntent(

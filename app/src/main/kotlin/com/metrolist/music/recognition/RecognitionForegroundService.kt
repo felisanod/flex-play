@@ -25,7 +25,6 @@ import com.flexplayer.music.MainActivity
 import com.flexplayer.music.R
 import com.flexplayer.music.db.DatabaseDao
 import com.flexplayer.music.db.entities.RecognitionHistory
-import com.flexplayer.music.widget.MusicRecognizerWidgetReceiver
 import com.flexplayer.shazamkit.models.RecognitionResult
 import com.flexplayer.shazamkit.models.RecognitionStatus
 import dagger.hilt.EntryPoint
@@ -512,11 +511,8 @@ class RecognitionForegroundService : Service() {
     }
 
     private fun updateAllWidgets() {
-        sendBroadcast(
-            Intent(this, MusicRecognizerWidgetReceiver::class.java).apply {
-                action = MusicRecognizerWidgetReceiver.ACTION_UPDATE_WIDGET
-            },
-        )
+        // Music recognizer widget has been removed. This is a no-op kept so
+        // existing callers compile; safe to delete when callers are removed.
     }
 
     private fun createNotificationChannel() {

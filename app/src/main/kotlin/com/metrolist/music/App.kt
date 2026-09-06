@@ -29,12 +29,16 @@ import com.flexplayer.kugou.KuGou
 import com.flexplayer.lastfm.LastFM
 import com.flexplayer.music.BuildConfig
 import com.flexplayer.music.constants.*
+import com.flexplayer.music.db.MusicDatabase
 import com.flexplayer.music.di.ApplicationScope
 import com.flexplayer.music.extensions.toEnum
 import com.flexplayer.music.extensions.toInetSocketAddress
+import com.flexplayer.music.utils.AudioPermissionHelper
+import com.flexplayer.music.utils.AudioScanner
 import com.flexplayer.music.utils.CrashHandler
 import com.flexplayer.music.utils.ArtistNameAliases
 import com.flexplayer.music.utils.InnerTubeXPlayer
+import com.flexplayer.music.utils.LocalMediaScanner
 import com.flexplayer.music.utils.dataStore
 import com.flexplayer.music.utils.safeDataStoreEdit
 import com.flexplayer.music.utils.reportException
@@ -66,6 +70,9 @@ class App :
     @ApplicationScope
     lateinit var applicationScope: CoroutineScope
 
+    @Inject
+    lateinit var database: MusicDatabase
+
     override fun onCreate() {
         super.onCreate()
 
@@ -94,6 +101,55 @@ class App :
         // Pre-read Coil cache size on background to avoid runBlocking in newImageLoader
         applicationScope.launch(Dispatchers.IO) {
             cachedCoilCacheSize = dataStore.data.map { it[MaxImageCacheSizeKey] ?: 512 }.first()
+        }
+
+        // Scan local device media on startup so local songs are immediately available
+        // in the Library, even before the user navigates to the Local Media section.
+        applicationScope.launch(Dispatchers.IO) {
+            try {
+                LocalMediaScanner.removeMissingFiles(this@App, database)
+                if (AudioPermissionHelper.hasPermission(this@App)) {
+                    val scanner = AudioScanner(this@App)
+                    val files = runCatching { scanner.scanAudioFiles(minDurationMs = 5_000L) }
+                        .onFailure { Timber.tag("App").e(it, "AudioScanner failed; falling back to LocalMediaScanner") }
+                        .getOrNull()
+
+                    if (files != null) {
+                        val existingUris = database.localMediaSongs().first().map { it.mediaStoreUri }.toSet()
+                        val entities = files
+                            .filter { it.uri.toString() !in existingUris }
+                            .map { file ->
+                                com.flexplayer.music.db.entities.LocalMediaEntity(
+                                    id = "audio_${file.id}",
+                                    songId = "audio_${file.id}",
+                                    mediaStoreUri = file.uri.toString(),
+                                    displayName = file.path.substringAfterLast('/').ifEmpty { file.title },
+                                    mimeType = file.mimeType,
+                                    size = file.size,
+                                    duration = file.duration.toInt().takeIf { it > 0 },
+                                    artist = file.artist,
+                                    album = file.album,
+                                    title = file.title,
+                                    thumbnailPath = null,
+                                    dateAdded = java.time.LocalDateTime.ofEpochSecond(file.dateAdded, 0, java.time.ZoneOffset.UTC),
+                                    dateModified = java.time.LocalDateTime.ofEpochSecond(file.dateAdded, 0, java.time.ZoneOffset.UTC),
+                                    isDownloaded = false,
+                                )
+                            }
+                        if (entities.isNotEmpty()) {
+                            database.insert(entities)
+                        }
+                        Timber.tag("App").d("Startup audio scan inserted ${entities.size} new files (${files.size - entities.size} already known)")
+                    } else {
+                        LocalMediaScanner.scanLocalMedia(this@App, database)
+                    }
+                } else {
+                    // Permission not granted yet — only run legacy scanner (downloaded songs)
+                    LocalMediaScanner.scanLocalMedia(this@App, database)
+                }
+            } catch (e: Exception) {
+                Timber.tag("App").e(e, "Initial local media scan failed")
+            }
         }
 
         // تهيئة إعدادات التطبيق عند الإقلاع

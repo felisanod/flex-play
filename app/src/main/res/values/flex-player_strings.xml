@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="no_local_media">No local media found</string>
+    <string name="local_media_hint">Local audio files saved to your device</string>
+    <string name="permission_media_audio_title">Permission required</string>
+    <string name="permission_media_audio_description">To show your local songs, flex-player needs access to audio files on your device.</string>
+    <string name="grant_permission">Grant permission</string>
+    <string name="widget_music_player_4x1">flex-player Now Playing (Wide)</string>
+    <string name="widget_music_player_3x1">flex-player Now Playing</string>
+    <string name="widget_description_4x1">Soft-surface neomorphic 4×1 home-screen widget with album art, song info and transport controls.</string>
+    <string name="widget_description_3x1">Compact 3×1 neomorphic home-screen widget with title, artist and transport controls.</string>
+    <string name="previous_track">Previous track</string>
+    <string name="next_track">Next track</string>
+    <string name="repeat">Repeat</string>
+</resources>

@@ -12,6 +12,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.graphics.Bitmap
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -34,6 +35,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
+import android.widget.RemoteViews
+import com.flexplayer.music.widget.AlbumArtRenderer
 import androidx.core.app.NotificationCompat
 import androidx.datastore.preferences.core.Preferences
 import androidx.core.app.ServiceCompat
@@ -79,10 +82,7 @@ import androidx.media3.exoplayer.audio.SilenceSkippingAudioProcessor
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder
-import androidx.media3.extractor.ExtractorsFactory
-import androidx.media3.extractor.mkv.MatroskaExtractor
-import androidx.media3.extractor.mp4.FragmentedMp4Extractor
-import androidx.media3.extractor.mp4.Mp4Extractor
+import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaController
@@ -217,8 +217,6 @@ import com.flexplayer.music.utils.dataStore
 import com.flexplayer.music.utils.get
 import com.flexplayer.music.utils.reportException
 import com.flexplayer.music.widget.flexPlayerWidgetManager
-import com.flexplayer.music.widget.MusicWidgetReceiver
-import com.flexplayer.music.widget.PlaylistWidgetReceiver
 import com.flexplayer.music.ui.utils.resize
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CancellationException
@@ -467,6 +465,10 @@ class MusicService :
 
     private var scrobbleManager: ScrobbleManager? = null
 
+    private lateinit var notificationManager: NotificationManager
+    private var artworkBitmap: Bitmap? = null
+    private var currentArtworkUri: String? = null
+
     val automixItems = MutableStateFlow<List<MediaItem>>(emptyList())
 
     // Tracks the original queue size to distinguish original items from auto-added ones
@@ -483,6 +485,9 @@ class MusicService :
     // leaving the player "prepared but paused" forever.
     private var pausedDueToNetworkError = false
     private var silenceSkipJob: Job? = null
+    private var notificationUpdateJob: Job? = null
+    private var lastNotificationCallback: MediaNotification.Provider.Callback? = null
+    private var lastActionFactory: MediaNotification.ActionFactory? = null
 
     // Cached preferences to avoid runBlocking DataStore reads in hot paths
     @Volatile
@@ -617,6 +622,7 @@ class MusicService :
         // On some OEMs (e.g. MIUI), even a DataStore read can be slow
         // enough to miss the window, so we promote before any I/O.
         ensureForegroundChannelExists()
+        notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (!ensureStartedAsForegroundOrStop()) {
             return
         }
@@ -631,51 +637,6 @@ class MusicService :
 
         seedLoudnessCacheFromPrefs()
 
-        val defaultMediaNotificationProvider =
-            DefaultMediaNotificationProvider(
-                this,
-                { NOTIFICATION_ID },
-                CHANNEL_ID,
-                R.string.music_player,
-            ).apply {
-                setSmallIcon(R.drawable.small_icon)
-            }
-
-        setMediaNotificationProvider(
-            object : MediaNotification.Provider {
-                override fun createNotification(
-                    mediaSession: MediaSession,
-                    mediaButtonPreferences: ImmutableList<CommandButton>,
-                    actionFactory: MediaNotification.ActionFactory,
-                    onNotificationChangedCallback: MediaNotification.Provider.Callback,
-                ): MediaNotification {
-                    val trackingCallback =
-                        MediaNotification.Provider.Callback { notification ->
-                            latestMediaNotification = notification.notification
-                            onNotificationChangedCallback.onNotificationChanged(notification)
-                        }
-
-                    return defaultMediaNotificationProvider
-                        .createNotification(
-                            mediaSession,
-                            mediaButtonPreferences,
-                            actionFactory,
-                            trackingCallback,
-                        ).also { mediaNotification ->
-                            latestMediaNotification = mediaNotification.notification
-                        }
-                }
-
-                override fun handleCustomCommand(
-                    session: MediaSession,
-                    action: String,
-                    extras: Bundle,
-                ): Boolean = defaultMediaNotificationProvider.handleCustomCommand(session, action, extras)
-
-                override fun getNotificationChannelInfo(): MediaNotification.Provider.NotificationChannelInfo =
-                    defaultMediaNotificationProvider.notificationChannelInfo
-            },
-        )
         player = createExoPlayer(prefs = startupPrefs!!)
         player.addListener(this@MusicService)
         sleepTimer =
@@ -863,6 +824,7 @@ class MusicService :
 
         currentSong.debounce(1000).collect(scope) { song ->
             updateNotification()
+            updateNotificationManual()
             updateWidgetUI(player.isPlaying)
         }
 
@@ -1350,6 +1312,18 @@ class MusicService :
         }
         player.addAnalyticsListener(PlaybackStatsListener(false, this@MusicService))
 
+        if (::player.isInitialized) {
+            try {
+                player.volume = player.volume.coerceIn(0f, 1f)
+            } catch (_: Exception) {
+            }
+        } else {
+            try {
+                player.volume = 1f
+            } catch (_: Exception) {
+            }
+        }
+
         // Cleanup handled manually in onDestroy/release
         _playerFlow.value = player
         return player
@@ -1559,6 +1533,111 @@ class MusicService :
 
     private fun stopOnError() {
         player.pause()
+    }
+
+    private fun startNotificationUpdateLoop() {
+        if (notificationUpdateJob != null) return
+        notificationUpdateJob = scope.launch(Dispatchers.Main) {
+            while (isActive) {
+                if (player.isPlaying) {
+                    updateNotificationManual()
+                }
+                delay(1000L)
+            }
+        }
+    }
+
+    private fun stopNotificationUpdateLoop() {
+        notificationUpdateJob?.cancel()
+        notificationUpdateJob = null
+    }
+
+    private fun updateNotificationManual() {
+        if (!::player.isInitialized) return
+        val metadata = player.mediaMetadata
+        val isPlaying = player.isPlaying
+        val isLiked = currentSong.value?.song?.let { if (it.isEpisode) it.inLibrary != null else it.liked } ?: false
+
+        val remoteViews = RemoteViews(packageName, R.layout.notification_neo)
+        remoteViews.setTextViewText(R.id.notification_title, metadata.title ?: getString(R.string.no_song_playing))
+        remoteViews.setTextViewText(R.id.notification_artist, metadata.artist ?: "")
+        
+        remoteViews.setImageViewResource(
+            R.id.notification_btn_play_pause,
+            if (isPlaying) R.drawable.neo_ic_pause else R.drawable.neo_ic_play
+        )
+        remoteViews.setImageViewResource(
+            R.id.notification_btn_like,
+            if (isLiked) R.drawable.neo_ic_heart else R.drawable.neo_ic_heart_outline
+        )
+
+        // Progress
+        val duration = player.duration
+        val position = player.currentPosition
+        if (duration > 0) {
+            remoteViews.setProgressBar(R.id.notification_progress, 1000, ((position.toDouble() / duration.toDouble()) * 1000).toInt(), false)
+            remoteViews.setTextViewText(R.id.notification_time_curr, com.flexplayer.music.utils.makeTimeString(position))
+            remoteViews.setTextViewText(R.id.notification_time_total, com.flexplayer.music.utils.makeTimeString(duration))
+        } else {
+            remoteViews.setProgressBar(R.id.notification_progress, 1000, 0, false)
+            remoteViews.setTextViewText(R.id.notification_time_curr, "0:00")
+            remoteViews.setTextViewText(R.id.notification_time_total, "0:00")
+        }
+
+        // Button Intents
+        val playPauseIntent = Intent(this, MusicService::class.java).apply { action = flexPlayerWidgetManager.ACTION_PLAY_PAUSE }
+        remoteViews.setOnClickPendingIntent(R.id.notification_btn_play_pause, PendingIntent.getService(this, 300, playPauseIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+
+        val prevIntent = Intent(this, MusicService::class.java).apply { action = flexPlayerWidgetManager.ACTION_PREV }
+        remoteViews.setOnClickPendingIntent(R.id.notification_btn_prev, PendingIntent.getService(this, 301, prevIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+
+        val nextIntent = Intent(this, MusicService::class.java).apply { action = flexPlayerWidgetManager.ACTION_NEXT }
+        remoteViews.setOnClickPendingIntent(R.id.notification_btn_next, PendingIntent.getService(this, 302, nextIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+
+        val likeIntent = Intent(this, MusicService::class.java).apply { action = flexPlayerWidgetManager.ACTION_LIKE }
+        remoteViews.setOnClickPendingIntent(R.id.notification_btn_like, PendingIntent.getService(this, 303, likeIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+
+        // Content intent
+        val contentIntent = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+
+        // Artwork
+        val artworkUri = metadata.artworkUri?.toString()
+        if (artworkUri != currentArtworkUri) {
+            currentArtworkUri = artworkUri
+            scope.launch {
+                artworkBitmap = runCatching {
+                    AlbumArtRenderer.loadFaded(this@MusicService, artworkUri, 400, 400)
+                }.getOrNull()
+                updateNotificationManual()
+            }
+        }
+        if (artworkBitmap != null) {
+            remoteViews.setImageViewBitmap(R.id.notification_artwork, artworkBitmap)
+        } else {
+            remoteViews.setImageViewResource(R.id.notification_artwork, R.drawable.default_cover)
+        }
+
+        val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.small_icon)
+            .setCustomContentView(remoteViews)
+            .setCustomBigContentView(remoteViews)
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setContentIntent(contentIntent)
+            .setOngoing(isPlaying)
+
+        val notification = notificationBuilder.build()
+        latestMediaNotification = notification
+
+        if (isPlaying) {
+            startForegroundSafely(notification, "Foreground service start denied", "Failed to enter foreground")
+            startNotificationUpdateLoop()
+        } else {
+            notificationManager.notify(NOTIFICATION_ID, notification)
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
+            stopNotificationUpdateLoop()
+        }
     }
 
     private fun updateNotification(isLiked: Boolean? = currentSong.value?.song?.let { if (it.isEpisode) it.inLibrary != null else it.liked }) {
@@ -2492,6 +2571,7 @@ class MusicService :
         lastPlaybackSpeed = -1.0f // force update song
 
         setupAudioNormalization()
+        updateNotificationManual()
 
         scrobbleManager?.onSongStop()
         if (player.playWhenReady && player.playbackState == Player.STATE_READY) {
@@ -2595,6 +2675,7 @@ class MusicService :
                 Timber.tag(TAG).d("Playback successful for $mediaId, reset retry count")
             }
             scheduleCrossfade()
+            updateNotificationManual()
         }
 
         if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
@@ -2633,6 +2714,7 @@ class MusicService :
         if (playWhenReady) {
             applyCachedAudioNormalizationNow()
         }
+        updateNotificationManual()
 
         updateInitialBufferRecovery(player.playbackState)
     }
@@ -3886,9 +3968,12 @@ class MusicService :
     private fun createMediaSourceFactory() =
         DefaultMediaSourceFactory(
             createDataSourceFactory(),
-            ExtractorsFactory {
-                arrayOf(MatroskaExtractor(), FragmentedMp4Extractor(), Mp4Extractor())
-            },
+            // Use DefaultExtractorsFactory so MP3, OGG, FLAC, WAV, M4A, OPUS, etc.
+            // are all recognised. The previous custom factory only included MKV/MP4
+            // extractors, which made any local audio file fail with
+            // PARSING_CONTAINER_UNSUPPORTED.
+            DefaultExtractorsFactory()
+                .setConstantBitrateSeekingEnabled(true),
         )
 
     private fun createRenderersFactory(
@@ -4112,8 +4197,13 @@ class MusicService :
             NotificationChannel(
                 CHANNEL_ID,
                 getString(R.string.music_player),
-                NotificationManager.IMPORTANCE_LOW,
-            ),
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setShowBadge(false)
+                setSound(null, null)
+                enableVibration(false)
+            },
         )
     }
 
@@ -4270,17 +4360,7 @@ class MusicService :
         session: MediaSession,
         startInForegroundRequired: Boolean,
     ) {
-        try {
-            super.onUpdateNotification(session, startInForegroundRequired)
-        } catch (e: ForegroundServiceStartNotAllowedException) {
-            handleForegroundServiceStartNotAllowed(e)
-        } catch (e: IllegalStateException) {
-            if (isForegroundServiceStartNotAllowedException(e)) {
-                handleForegroundServiceStartNotAllowed(e)
-            } else {
-                throw e
-            }
-        }
+        // Do nothing to let our manual updateNotificationManual() handle everything
     }
 
     override fun onStartCommand(
@@ -4288,16 +4368,11 @@ class MusicService :
         flags: Int,
         startId: Int,
     ): Int {
-        // On Android O+, every startForegroundService() call requires
-        // Service.startForeground() to be called within a short timeout.
-        // Some OEMs (e.g. MIUI) strictly enforce this even when the
-        // service is already in the foreground, so promote here unless Media3 is handling a
-        // notification dismissal. Re-promoting that intent immediately restores the dismissed
-        // media control.
         val isNotificationDismissal =
             intent?.getBooleanExtra(MediaNotification.NOTIFICATION_DISMISSED_EVENT_KEY, false) == true
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !isNotificationDismissal) {
-            if (!ensureForegroundWithLatestNotificationOrStop()) {
+            ensureForegroundChannelExists()
+            if (!ensureStartedAsForegroundOrStop()) {
                 return START_NOT_STICKY
             }
         }
@@ -4307,143 +4382,53 @@ class MusicService :
                 handleAlarmTrigger(intent)
             }
 
-            MusicWidgetReceiver.ACTION_PLAY_PAUSE -> {
+            flexPlayerWidgetManager.ACTION_PLAY_PAUSE -> {
                 if (player.isPlaying) player.pause() else player.play()
+                updateNotificationManual()
                 updateWidgetUI(player.isPlaying)
             }
 
-            MusicWidgetReceiver.ACTION_LIKE -> {
+            flexPlayerWidgetManager.ACTION_LIKE -> {
                 toggleLike()
+                updateNotificationManual()
             }
 
-            MusicWidgetReceiver.ACTION_NEXT -> {
+            flexPlayerWidgetManager.ACTION_NEXT -> {
                 player.seekToNext()
+                updateNotificationManual()
                 updateWidgetUI(player.isPlaying)
             }
 
-            MusicWidgetReceiver.ACTION_PREVIOUS -> {
+            flexPlayerWidgetManager.ACTION_PREV -> {
                 player.seekToPrevious()
+                updateNotificationManual()
                 updateWidgetUI(player.isPlaying)
             }
 
-            MusicWidgetReceiver.ACTION_UPDATE_WIDGET,
-            PlaylistWidgetReceiver.ACTION_UPDATE_WIDGET -> {
+            flexPlayerWidgetManager.ACTION_REPEAT -> {
+                player.repeatMode = when (player.repeatMode) {
+                    Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
+                    Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_OFF
+                    Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                    else -> Player.REPEAT_MODE_OFF
+                }
+                updateNotificationManual()
                 updateWidgetUI(player.isPlaying)
             }
 
-            PlaylistWidgetReceiver.ACTION_PLAY_TARGET -> {
-                handlePlaylistWidgetPlay(intent)
+            flexPlayerWidgetManager.ACTION_STOP -> {
+                player.pause()
+                player.stop()
+                player.clearMediaItems()
+                ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+                stopSelf()
             }
         }
 
-        return super.onStartCommand(intent, flags, startId)
+        super.onStartCommand(intent, flags, startId)
+        return START_STICKY
     }
 
-
-    private fun handlePlaylistWidgetPlay(intent: Intent) {
-        scope.launch {
-            try {
-                val queue = withContext(Dispatchers.IO) {
-                    buildPlaylistWidgetQueue(intent)
-                }
-                if (queue == null) {
-                    openPlaylistWidgetTarget(intent)
-                    return@launch
-                }
-                playQueue(queue, playWhenReady = true)
-                updateWidgetUI(true)
-            } catch (t: Throwable) {
-                Timber.tag(TAG).e(t, "Failed to start playlist widget target")
-                openPlaylistWidgetTarget(intent)
-            }
-        }
-    }
-
-    private fun openPlaylistWidgetTarget(source: Intent) {
-        val activityIntent = Intent(this, MainActivity::class.java).apply {
-            action = MainActivity.ACTION_OPEN_WIDGET_TARGET
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra(
-                MainActivity.EXTRA_WIDGET_TARGET_TYPE,
-                source.getStringExtra(PlaylistWidgetReceiver.EXTRA_TARGET_TYPE),
-            )
-            putExtra(
-                MainActivity.EXTRA_WIDGET_TARGET_ID,
-                source.getStringExtra(PlaylistWidgetReceiver.EXTRA_TARGET_ID),
-            )
-        }
-        try {
-            startActivity(activityIntent)
-        } catch (t: Throwable) {
-            Timber.tag(TAG).e(t, "Failed to open playlist widget target")
-        }
-    }
-
-    private suspend fun buildPlaylistWidgetQueue(intent: Intent): Queue? {
-        val targetType = intent.getStringExtra(PlaylistWidgetReceiver.EXTRA_TARGET_TYPE) ?: return null
-        val targetId = intent.getStringExtra(PlaylistWidgetReceiver.EXTRA_TARGET_ID).orEmpty()
-        val targetTitle = intent.getStringExtra(PlaylistWidgetReceiver.EXTRA_TARGET_TITLE)
-
-        return when (targetType) {
-            PlaylistWidgetReceiver.TARGET_TYPE_LOCAL -> {
-                if (targetId.isBlank()) return null
-                val songs = database.playlistSongs(targetId).first()
-                if (songs.isEmpty()) return null
-                val playlistName = database.playlist(targetId).first()?.playlist?.name ?: targetTitle
-                ListQueue(
-                    title = playlistName,
-                    items = songs.map { it.song.toMediaItem() },
-                )
-            }
-
-            PlaylistWidgetReceiver.TARGET_TYPE_ONLINE -> {
-                if (targetId.isBlank()) return null
-                val cachedPlaylist = database.playlistByBrowseId(targetId).first()
-                val cachedSongs = cachedPlaylist?.let { database.playlistSongs(it.playlist.id).first() }.orEmpty()
-                if (cachedSongs.isNotEmpty()) {
-                    ListQueue(
-                        title = cachedPlaylist?.playlist?.name ?: targetTitle,
-                        items = cachedSongs.map { it.song.toMediaItem() },
-                    )
-                } else {
-                    YouTubePlaylistQueue(
-                        playlistId = targetId,
-                        playlistTitle = targetTitle,
-                    )
-                }
-            }
-
-            PlaylistWidgetReceiver.TARGET_TYPE_LIKED -> {
-                val songs = database.likedSongsByCreateDateAsc().first()
-                if (songs.isEmpty()) return null
-                ListQueue(
-                    title = getString(R.string.liked_songs),
-                    items = songs.map { it.toMediaItem() },
-                )
-            }
-
-            PlaylistWidgetReceiver.TARGET_TYPE_DOWNLOADED -> {
-                val songs = database.downloadedSongsByCreateDateAsc().first()
-                if (songs.isEmpty()) return null
-                ListQueue(
-                    title = getString(R.string.downloaded_songs),
-                    items = songs.map { it.toMediaItem() },
-                )
-            }
-
-            PlaylistWidgetReceiver.TARGET_TYPE_TOP -> {
-                val limit = targetId.toIntOrNull() ?: 50
-                val songs = database.mostPlayedSongs(LocalDateTime.of(1970, 1, 1, 0, 0), limit = limit).first()
-                if (songs.isEmpty()) return null
-                ListQueue(
-                    title = getString(R.string.my_top),
-                    items = songs.map { it.toMediaItem() },
-                )
-            }
-
-            else -> null
-        }
-    }
 
     private fun handleAlarmTrigger(intent: Intent) {
         scope.launch(Dispatchers.IO) {
@@ -4602,6 +4587,7 @@ class MusicService :
                         isLiked = resolvedIsLiked,
                         duration = if (player.duration != C.TIME_UNSET) player.duration else 0,
                         currentPosition = player.currentPosition,
+                        isRepeatOne = player.repeatMode == androidx.media3.common.Player.REPEAT_MODE_ONE,
                     )
                 }
             } catch (e: Exception) {
@@ -4833,44 +4819,54 @@ class MusicService :
 
         crossfadeJob =
             scope.launch {
-                val speed = fadingPlayer?.playbackParameters?.speed?.coerceAtLeast(0.01f) ?: 1f
-                val duration = (crossfadeDuration / speed).toLong()
-                val steps = 20
-                val stepTime = duration / steps
-                val startVolume =
-                    try {
-                        fadingPlayer?.volume ?: 1f
-                    } catch (e: Exception) {
-                        1f
-                    }
-
-                for (i in 0..steps) {
-                    if (!isActive) break
-                    while (!player.isPlaying && isActive) {
-                        delay(100)
-                    }
-
-                    val progress = i / steps.toFloat()
-                    val fadeIn = 1.0f - (1.0f - progress) * (1.0f - progress)
-                    val fadeOut = (1.0f - progress) * (1.0f - progress)
-
-                    try {
-                        player.volume = startVolume * fadeIn
-                        fadingPlayer?.volume = startVolume * fadeOut
-                    } catch (e: Exception) {
-                        break
-                    }
-
-                    delay(stepTime)
-                }
-
                 try {
-                    fadingPlayer?.volume = 0f
-                    player.volume = startVolume
-                } catch (e: Exception) {
-                }
+                    val speed = fadingPlayer?.playbackParameters?.speed?.coerceAtLeast(0.01f) ?: 1f
+                    val duration = (crossfadeDuration / speed).toLong()
+                    val steps = 20
+                    val stepTime = duration / steps
+                    val startVolume =
+                        try {
+                            fadingPlayer?.volume ?: 1f
+                        } catch (e: Exception) {
+                            1f
+                        }
 
-                cleanupCrossfade(fadingPlayerSessionId = previousAudioSessionId)
+                    for (i in 0..steps) {
+                        if (!isActive) break
+                        var waitedMs = 0L
+                        while (!player.isPlaying && isActive && waitedMs < 10_000L) {
+                            delay(100)
+                            waitedMs += 100
+                        }
+                        if (!isActive) break
+
+                        val progress = i / steps.toFloat()
+                        val fadeIn = 1.0f - (1.0f - progress) * (1.0f - progress)
+                        val fadeOut = (1.0f - progress) * (1.0f - progress)
+
+                        try {
+                            player.volume = startVolume * fadeIn
+                            fadingPlayer?.volume = startVolume * fadeOut
+                        } catch (e: Exception) {
+                            break
+                        }
+
+                        delay(stepTime)
+                    }
+                } finally {
+                    try {
+                        val finalVolume =
+                            try {
+                                fadingPlayer?.volume ?: 1f
+                            } catch (e: Exception) {
+                                1f
+                            }
+                        fadingPlayer?.volume = 0f
+                        player.volume = finalVolume
+                    } catch (e: Exception) {
+                    }
+                    cleanupCrossfade(fadingPlayerSessionId = previousAudioSessionId)
+                }
             }
     }
 

@@ -38,20 +38,37 @@ data class LocalMediaEntity(
     val isDownloaded: Boolean = false,
 ) {
     fun toSong(): Song {
+        val artistName = artist?.takeIf { it.isNotBlank() } ?: "Unknown"
+        val artistEntity = ArtistEntity(
+            id = "local_${songId}_artist",
+            name = artistName,
+            isLocal = true,
+        )
+        val albumEntity = album?.takeIf { it.isNotBlank() }?.let { albumName ->
+            AlbumEntity(
+                id = "local_${songId}_album",
+                title = albumName,
+                songCount = 0,
+                duration = 0,
+                isLocal = true,
+            )
+        }
+
         val songEntity = SongEntity(
             id = songId,
             title = title ?: displayName,
             duration = duration ?: 0,
             thumbnailUrl = thumbnailPath,
+            albumId = albumEntity?.id,
             albumName = album,
             isLocal = true,
             isDownloaded = isDownloaded,
         )
         return Song(
             song = songEntity,
-            artists = emptyList(),
+            artists = listOf(artistEntity),
             artistMaps = emptyList(),
-            album = null,
+            album = albumEntity,
             format = null,
         )
     }

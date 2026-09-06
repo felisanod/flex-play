@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
@@ -27,6 +28,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -80,6 +82,10 @@ import com.flexplayer.music.ui.component.LibrarySearchHeader
 import com.flexplayer.music.ui.component.LibraryPlaylistGridItem
 import com.flexplayer.music.ui.component.LibraryPlaylistListItem
 import com.flexplayer.music.ui.component.LocalMenuState
+import com.flexplayer.music.ui.component.NeumorphCard
+import com.flexplayer.music.ui.component.NeumorphDefaults
+import com.flexplayer.music.ui.component.NeumorphFAB
+import com.flexplayer.music.ui.component.NeumorphIconButton
 import com.flexplayer.music.ui.component.PlaylistGridItem
 import com.flexplayer.music.ui.component.PlaylistListItem
 import com.flexplayer.music.ui.component.SortHeader
@@ -329,75 +335,84 @@ fun LibraryPlaylistsScreen(
     }
 
     val headerContent = @Composable {
-        LibrarySearchHeader(
-            isSearchActive = isSearchActive,
-            searchQuery = searchQuery,
-            onSearchQueryChange = viewModel::updateSearchQuery,
-            onBack = {
-                isSearchActive = false
-                viewModel.updateSearchQuery("")
-            },
-            keyboardController = keyboardController,
-            modifier = Modifier.padding(start = 16.dp),
+        NeumorphCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            shape = RoundedCornerShape(NeumorphDefaults.CornerLarge),
+            elevation = 6.dp,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         ) {
-            SortHeader(
-                sortType = sortType,
-                sortDescending = sortDescending,
-                onSortTypeChange = onSortTypeChange,
-                onSortDescendingChange = onSortDescendingChange,
-                sortTypeText = { sortType ->
-                    when (sortType) {
-                        PlaylistSortType.CREATE_DATE -> R.string.sort_by_create_date
-                        PlaylistSortType.NAME -> R.string.sort_by_name
-                        PlaylistSortType.SONG_COUNT -> R.string.sort_by_song_count
-                        PlaylistSortType.LAST_UPDATED -> R.string.sort_by_last_updated
-                    }
+            LibrarySearchHeader(
+                isSearchActive = isSearchActive,
+                searchQuery = searchQuery,
+                onSearchQueryChange = viewModel::updateSearchQuery,
+                onBack = {
+                    isSearchActive = false
+                    viewModel.updateSearchQuery("")
                 },
-            )
-
-            Spacer(Modifier.weight(1f))
-
-            Text(
-                text = pluralStringResource(
-                    R.plurals.n_playlist,
-                    visibleResults.count { !it.autoPlaylist },
-                    visibleResults.count { !it.autoPlaylist },
-                ),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.secondary,
-            )
-
-            IconButton(
-                onClick = { isSearchActive = true },
-                modifier = Modifier.padding(start = 8.dp).size(40.dp),
+                keyboardController = keyboardController,
+                modifier = Modifier.padding(start = 4.dp),
             ) {
-                Icon(
-                    painter = painterResource(R.drawable.search),
-                    contentDescription = stringResource(R.string.search),
+                SortHeader(
+                    sortType = sortType,
+                    sortDescending = sortDescending,
+                    onSortTypeChange = onSortTypeChange,
+                    onSortDescendingChange = onSortDescendingChange,
+                    sortTypeText = { sortType ->
+                        when (sortType) {
+                            PlaylistSortType.CREATE_DATE -> R.string.sort_by_create_date
+                            PlaylistSortType.NAME -> R.string.sort_by_name
+                            PlaylistSortType.SONG_COUNT -> R.string.sort_by_song_count
+                            PlaylistSortType.LAST_UPDATED -> R.string.sort_by_last_updated
+                        }
+                    },
                 )
-            }
 
-            IconButton(
-                onClick = {
-                    onViewTypeChange(viewType.toggle())
-                },
-                modifier = Modifier.padding(end = 8.dp).size(40.dp),
-            ) {
-                Icon(
-                    painter =
-                    painterResource(
-                        when (viewType) {
-                            LibraryViewType.LIST -> R.drawable.list
-                            LibraryViewType.GRID -> R.drawable.grid_view
-                        },
+                Spacer(Modifier.weight(1f))
+
+                Text(
+                    text = pluralStringResource(
+                        R.plurals.n_playlist,
+                        visibleResults.count { !it.autoPlaylist },
+                        visibleResults.count { !it.autoPlaylist },
                     ),
-                    contentDescription = stringResource(
-                        when (viewType) {
-                            LibraryViewType.LIST -> R.string.switch_to_grid_view
-                            LibraryViewType.GRID -> R.string.switch_to_list_view
-                        },
-                    ),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.secondary,
                 )
+
+                IconButton(
+                    onClick = { isSearchActive = true },
+                    modifier = Modifier.padding(start = 8.dp).size(40.dp),
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.search),
+                        contentDescription = stringResource(R.string.search),
+                    )
+                }
+
+                IconButton(
+                    onClick = {
+                        onViewTypeChange(viewType.toggle())
+                    },
+                    modifier = Modifier.padding(end = 8.dp).size(40.dp),
+                ) {
+                    Icon(
+                        painter =
+                        painterResource(
+                            when (viewType) {
+                                LibraryViewType.LIST -> R.drawable.list
+                                LibraryViewType.GRID -> R.drawable.grid_view
+                            },
+                        ),
+                        contentDescription = stringResource(
+                            when (viewType) {
+                                LibraryViewType.LIST -> R.string.switch_to_grid_view
+                                LibraryViewType.GRID -> R.string.switch_to_list_view
+                            },
+                        ),
+                    )
+                }
             }
         }
     }
@@ -444,25 +459,33 @@ fun LibraryPlaylistsScreen(
                         key = { it.key },
                         contentType = { CONTENT_TYPE_PLAYLIST },
                     ) { item ->
-                        if (item.autoPlaylist) {
-                            PlaylistListItem(
-                                playlist = item.playlist,
-                                autoPlaylist = true,
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            item.route?.let(navController::navigate)
-                                        }
-                                        .animateItem(),
-                            )
-                        } else {
-                            LibraryPlaylistListItem(
-                                menuState = menuState,
-                                coroutineScope = coroutineScope,
-                                playlist = item.playlist,
-                                modifier = Modifier.animateItem(),
-                            )
+                        NeumorphCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 5.dp)
+                                .animateItem(),
+                            shape = RoundedCornerShape(NeumorphDefaults.CornerMedium),
+                            elevation = 4.dp,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            onClick = if (item.autoPlaylist) {
+                                { item.route?.let(navController::navigate) }
+                            } else {
+                                null
+                            },
+                        ) {
+                            if (item.autoPlaylist) {
+                                PlaylistListItem(
+                                    playlist = item.playlist,
+                                    autoPlaylist = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            } else {
+                                LibraryPlaylistListItem(
+                                    menuState = menuState,
+                                    coroutineScope = coroutineScope,
+                                    playlist = item.playlist,
+                                )
+                            }
                         }
                     }
                 }
@@ -512,28 +535,29 @@ fun LibraryPlaylistsScreen(
                         key = { it.key },
                         contentType = { CONTENT_TYPE_PLAYLIST },
                     ) { item ->
-                        if (item.autoPlaylist) {
-                            PlaylistGridItem(
-                                playlist = item.playlist,
-                                fillMaxWidth = true,
-                                autoPlaylist = true,
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .combinedClickable(
-                                            onClick = {
-                                                item.route?.let(navController::navigate)
-                                            },
-                                        )
-                                        .animateItem(),
-                            )
-                        } else {
-                            LibraryPlaylistGridItem(
-                                menuState = menuState,
-                                coroutineScope = coroutineScope,
-                                playlist = item.playlist,
-                                modifier = Modifier.animateItem(),
-                            )
+                        NeumorphCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                                .animateItem(),
+                            shape = RoundedCornerShape(NeumorphDefaults.CornerLarge),
+                            elevation = 5.dp,
+                            contentPadding = PaddingValues(8.dp),
+                        ) {
+                            if (item.autoPlaylist) {
+                                PlaylistGridItem(
+                                    playlist = item.playlist,
+                                    fillMaxWidth = true,
+                                    autoPlaylist = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            } else {
+                                LibraryPlaylistGridItem(
+                                    menuState = menuState,
+                                    coroutineScope = coroutineScope,
+                                    playlist = item.playlist,
+                                )
+                            }
                         }
                     }
                 }
@@ -541,15 +565,16 @@ fun LibraryPlaylistsScreen(
         }
 
         // Always visible + button (no scroll hiding)
-        FloatingActionButton(
+        NeumorphFAB(
             onClick = { showCreatePlaylistDialog = true },
+            size = 60.dp,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .windowInsetsPadding(
                     LocalPlayerAwareWindowInsets.current
                         .only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)
                 )
-                .padding(16.dp)
+                .padding(16.dp),
         ) {
             Icon(
                 painter = painterResource(R.drawable.add),

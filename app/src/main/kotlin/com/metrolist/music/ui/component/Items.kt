@@ -98,6 +98,7 @@ import com.flexplayer.innertube.models.PodcastItem
 import com.flexplayer.innertube.models.SongItem
 import com.flexplayer.innertube.models.YTItem
 import com.flexplayer.music.LocalDatabase
+import com.flexplayer.music.ui.theme.neumorphic
 import com.flexplayer.music.LocalArtistNameAliases
 import com.flexplayer.music.LocalDownloadUtil
 import com.flexplayer.music.LocalNavController
@@ -480,6 +481,78 @@ fun GridItem(
 )
 
 @Composable
+private fun RowScope.SongListItemContent(
+    song: Song,
+    albumIndex: Int?,
+    isSelected: Boolean,
+    isActive: Boolean,
+    isPlaying: Boolean,
+    badges: @Composable RowScope.() -> Unit,
+    trailingContent: @Composable RowScope.() -> Unit,
+    artistNameAliases: Map<String, String>,
+    subtitleOverride: String? = null
+) {
+    Box(
+        modifier = Modifier.padding(6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        ItemThumbnail(
+            thumbnailUrl =
+            song.song.thumbnailUrl?.let { thumbnailUrl ->
+                if (song.isDownloaded) thumbnailUrl else thumbnailUrl.resize(200, 200)
+            },
+            albumIndex = albumIndex,
+            isSelected = isSelected,
+            isActive = isActive,
+            isPlaying = isPlaying,
+            shape = RoundedCornerShape(ThumbnailCornerRadius),
+            modifier = Modifier.size(ListThumbnailSize)
+        )
+    }
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .padding(horizontal = 6.dp)
+    ) {
+        Text(
+            text = song.song.title,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            badges()
+            if (subtitleOverride == null) {
+                Text(
+                    text = joinByBullet(
+                        song.orderedArtists.joinToArtistString(" ${stringResource(R.string.and)} ") {
+                            ArtistNameAliases.resolve(artistNameAliases, it.id, it.name)
+                        },
+                        makeTimeString(song.song.duration * 1000L)
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            } else {
+                Text(
+                    text = subtitleOverride,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+
+    trailingContent()
+}
+
+@Composable
 fun SongListItem(
     song: Song,
     modifier: Modifier = Modifier,
@@ -513,54 +586,133 @@ fun SongListItem(
     val artistNameAliases = LocalArtistNameAliases.current
     val swipeEnabled by rememberPreference(SwipeToSongKey, defaultValue = false)
 
+    // Stitch Design Tokens
+    val backgroundColor = Color(0xFFE8EDF5)
+    val surfaceColor = Color(0xFFF6F9FF)
+    val textMain = Color(0xFF1E293B)
+    val textMuted = Color(0xFF64748B)
+
     val content: @Composable () -> Unit = {
-         ListItem(
-             title = song.song.title,
-             subtitle = {
-                  badges()
-                  if (subtitleOverride == null) {
-                      Text(
-                           text = joinByBullet(
-                               song.orderedArtists.joinToArtistString(" ${stringResource(R.string.and)} ") {
-                                   ArtistNameAliases.resolve(artistNameAliases, it.id, it.name)
-                               },
-                              makeTimeString(song.song.duration * 1000L)
-                          ),
-                          style = MaterialTheme.typography.bodySmall,
-                          color = MaterialTheme.colorScheme.secondary,
-                          maxLines = 1,
-                          overflow = TextOverflow.Ellipsis,
-                      )
-                  } else {
-                     Text(
-                         text = subtitleOverride,
-                         style = MaterialTheme.typography.bodySmall,
-                         color = MaterialTheme.colorScheme.secondary,
-                         maxLines = 1,
-                         overflow = TextOverflow.Ellipsis,
-                     )
-                 }
-             },
-             thumbnailContent = {
-                 ItemThumbnail(
-                     thumbnailUrl =
-                         song.song.thumbnailUrl?.let { thumbnailUrl ->
-                             if (song.isDownloaded) thumbnailUrl else thumbnailUrl.resize(200, 200)
-                         },
-                     albumIndex = albumIndex,
-                     isSelected = isSelected,
-                     isActive = isActive,
-                     isPlaying = isPlaying,
-                     shape = RoundedCornerShape(ThumbnailCornerRadius),
-                     modifier = Modifier.size(ListThumbnailSize)
-                 )
-             },
-             trailingContent = trailingContent,
-             modifier = modifier,
-             isSelected = isSelected,
-             isActive = isActive
-         )
-     }
+        if (isActive) {
+            Box(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp, horizontal = 12.dp)
+                    .neumorphic(
+                        shape = RoundedCornerShape(20.dp),
+                        backgroundColor = backgroundColor,
+                        shadowRadius = 12.dp
+                    )
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(surfaceColor)
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier.padding(6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        ItemThumbnail(
+                            thumbnailUrl = song.song.thumbnailUrl?.let { thumbnailUrl ->
+                                if (song.isDownloaded) thumbnailUrl else thumbnailUrl.resize(200, 200)
+                            },
+                            albumIndex = albumIndex,
+                            isSelected = isSelected,
+                            isActive = isActive,
+                            isPlaying = isPlaying,
+                            shape = RoundedCornerShape(ThumbnailCornerRadius),
+                            modifier = Modifier.size(ListThumbnailSize)
+                        )
+                    }
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 6.dp)
+                    ) {
+                        Text(
+                            text = song.song.title,
+                            color = textMain,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            badges()
+                            Text(
+                                text = if (subtitleOverride == null) {
+                                    joinByBullet(
+                                        song.orderedArtists.joinToArtistString(" ${stringResource(R.string.and)} ") {
+                                            ArtistNameAliases.resolve(artistNameAliases, it.id, it.name)
+                                        },
+                                        makeTimeString(song.song.duration * 1000L)
+                                    )
+                                } else {
+                                    subtitleOverride
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = textMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    trailingContent()
+                }
+            }
+        } else {
+            ListItem(
+                title = song.song.title,
+                subtitle = {
+                    badges()
+                    if (subtitleOverride == null) {
+                        Text(
+                            text = joinByBullet(
+                                song.orderedArtists.joinToArtistString(" ${stringResource(R.string.and)} ") {
+                                    ArtistNameAliases.resolve(artistNameAliases, it.id, it.name)
+                                },
+                                makeTimeString(song.song.duration * 1000L)
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    } else {
+                        Text(
+                            text = subtitleOverride,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                },
+                thumbnailContent = {
+                    ItemThumbnail(
+                        thumbnailUrl =
+                        song.song.thumbnailUrl?.let { thumbnailUrl ->
+                            if (song.isDownloaded) thumbnailUrl else thumbnailUrl.resize(200, 200)
+                        },
+                        albumIndex = albumIndex,
+                        isSelected = isSelected,
+                        isActive = isActive,
+                        isPlaying = isPlaying,
+                        shape = RoundedCornerShape(ThumbnailCornerRadius),
+                        modifier = Modifier.size(ListThumbnailSize)
+                    )
+                },
+                trailingContent = trailingContent,
+                modifier = modifier,
+                isSelected = isSelected,
+                isActive = isActive
+            )
+        }
+    }
 
     if (isSwipeable && swipeEnabled) {
         SwipeToSongBox(
@@ -1489,7 +1641,7 @@ fun ItemThumbnail(
         if (albumIndex == null) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(thumbnailUrl?.resize(544, 544))
+                    .data(thumbnailUrl?.resize(544, 544) ?: R.drawable.default_cover)
                     .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
                     .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
                     .networkCachePolicy(coil3.request.CachePolicy.ENABLED)
@@ -1569,7 +1721,7 @@ fun LocalThumbnail(
     ) {
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
-                .data(thumbnailUrl)
+                .data(thumbnailUrl ?: R.drawable.default_cover)
                 .memoryCachePolicy(coil3.request.CachePolicy.ENABLED)
                 .diskCachePolicy(coil3.request.CachePolicy.ENABLED)
                 .networkCachePolicy(coil3.request.CachePolicy.ENABLED)

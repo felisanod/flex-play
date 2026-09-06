@@ -21,6 +21,7 @@ import com.flexplayer.music.constants.LibraryFilter
 import com.flexplayer.music.constants.LibraryViewType
 import com.flexplayer.music.constants.PlaylistViewTypeKey
 import com.flexplayer.music.ui.component.ChipsRow
+import com.flexplayer.music.ui.component.NeumorphChipsRow
 import com.flexplayer.music.utils.rememberEnumPreference
 
 @Composable
@@ -32,7 +33,7 @@ fun LibraryScreen() {
 
     val filterContent = @Composable {
         Row {
-            ChipsRow(
+            NeumorphChipsRow(
                 chips = listOf(
                     LibraryFilter.PLAYLISTS to stringResource(R.string.filter_playlists),
                     LibraryFilter.SONGS to stringResource(R.string.filter_songs),

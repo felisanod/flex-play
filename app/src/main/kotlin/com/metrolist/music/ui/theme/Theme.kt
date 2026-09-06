@@ -28,6 +28,9 @@ import com.flexplayer.music.R
 
 val DefaultThemeColor = Color(0xFFED5564)
 
+val neumorphicLightShadow = Color(0xFFFFFFFF)
+val neumorphicDarkShadow = Color(0xFFA6B4C8).copy(alpha = 0.65f)
+
 @Composable
 fun flexPlayerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -64,18 +67,18 @@ fun flexPlayerTheme(
 }
 
 private fun ColorScheme.neumorphicColors(darkTheme: Boolean): ColorScheme {
-    val bgLight = Color(0xFFE0E5EC)
+    val bgLight = Color(0xFFE8EDF5)
     val bgDark = Color(0xFF2D3436)
     val background = if (darkTheme) bgDark else bgLight
-    val surface = if (darkTheme) bgDark else bgLight
+    val surface = if (darkTheme) bgDark else Color(0xFFF6F9FF)
     val surfaceVariant = if (darkTheme) Color(0xFF353B48) else Color(0xFFE4E9F1)
     val surfaceContainerLow = if (darkTheme) Color(0xFF313845) else Color(0xFFE8ECF2)
     val surfaceContainer = if (darkTheme) Color(0xFF373E4A) else Color(0xFFEFF2F7)
     val surfaceContainerHigh = if (darkTheme) Color(0xFF3D454F) else Color(0xFFF5F7FA)
     val surfaceContainerHighest = if (darkTheme) Color(0xFF424B55) else Color(0xFFFAFBFC)
-    val onSurface = if (darkTheme) Color(0xFFE2E4E9) else Color(0xFF2D3436)
-    val onSurfaceVariant = if (darkTheme) Color(0xFFC4C7CF) else Color(0xFF5A5F6B)
-    val primary = if (darkTheme) Color(0xFFEF5564) else Color(0xFFEF5564)
+    val onSurface = if (darkTheme) Color(0xFFE2E4E9) else Color(0xFF1E293B)
+    val onSurfaceVariant = if (darkTheme) Color(0xFFC4C7CF) else Color(0xFF64748B)
+    val primary = if (darkTheme) Color(0xFF3B82F6) else Color(0xFF3B82F6)
     val onPrimary = if (darkTheme) Color.White else Color.White
     val outline = if (darkTheme) Color(0xFF8B919D) else Color(0xFFBCC3CF)
     val outlineVariant = if (darkTheme) Color(0xFF3D454F) else Color(0xFFE4E9F1)

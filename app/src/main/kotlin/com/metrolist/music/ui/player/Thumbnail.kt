@@ -9,6 +9,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -81,6 +82,8 @@ import com.flexplayer.music.constants.PlayerHorizontalPadding
 import com.flexplayer.music.constants.SeekExtraSeconds
 import com.flexplayer.music.constants.SwipeThumbnailKey
 import com.flexplayer.music.constants.ThumbnailCornerRadius
+import com.flexplayer.music.ui.theme.NeumorphicStyle
+import com.flexplayer.music.ui.theme.neumorphic
 import com.flexplayer.music.listentogether.RoomRole
 import com.flexplayer.music.ui.component.CastButton
 import com.flexplayer.music.utils.rememberEnumPreference
@@ -268,7 +271,7 @@ fun Thumbnail(
         if (currentItem > currentMediaIndex && canSkipNext) {
             playerConnection.player.seekToNext()
         } else if (currentItem < currentMediaIndex && canSkipPrevious) {
-            playerConnection.player.seekToPreviousMediaItem()
+            playerConnection.seekToPrevious()
         }
     }
 
@@ -556,10 +559,17 @@ private fun ThumbnailItem(
             },
         contentAlignment = Alignment.Center
     ) {
+        // Clean full-bleed compliant thumbnail without the old cradle frame
         Box(
             modifier = Modifier
                 .size(dimensions.thumbnailSize)
-                .clip(RoundedCornerShape(dimensions.cornerRadius))
+                .clip(RoundedCornerShape(24.dp))
+                .graphicsLayer {
+                    shadowElevation = 12f
+                    shape = RoundedCornerShape(24.dp)
+                    clip = true
+                },
+            contentAlignment = Alignment.Center
         ) {
             if (hidePlayerThumbnail) {
                 HiddenThumbnailPlaceholder(textBackgroundColor = textBackgroundColor)
@@ -628,6 +638,14 @@ private fun ThumbnailImage(
             }
             .background(MaterialTheme.colorScheme.surfaceVariant)
     ) {
+        // Fallback/Placeholder
+        Image(
+            painter = painterResource(R.drawable.default_cover),
+            contentDescription = null,
+            contentScale = if (cropArtwork) ContentScale.Crop else ContentScale.Fit,
+            modifier = Modifier.fillMaxSize()
+        )
+
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(artworkUri)

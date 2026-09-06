@@ -236,6 +236,7 @@ fun LibraryMixScreen(
     val artist = viewModel.artists.collectAsStateWithLifecycle()
     val songs = viewModel.songs.collectAsStateWithLifecycle()
     val playlist = viewModel.playlists.collectAsStateWithLifecycle()
+    val localMedia = viewModel.localMedia.collectAsStateWithLifecycle()
 
     var allItems = albums.value + artist.value + playlist.value
     val locale = LocalLocale.current.platformLocale
@@ -556,6 +557,39 @@ fun LibraryMixScreen(
                                         .fillMaxWidth()
                                         .clickable {
                                             navController.navigate("auto_playlist/uploaded")
+                                        }.animateItem(),
+                            )
+                        }
+                    }
+
+                    if (localMedia.value.isNotEmpty()) {
+                        item(
+                            key = "localMedia",
+                            contentType = { CONTENT_TYPE_PLAYLIST },
+                        ) {
+                            val localMediaSongs = localMedia.value
+                            val localMediaPlaylist =
+                                Playlist(
+                                    playlist =
+                                        PlaylistEntity(
+                                            id = "local_media",
+                                            name = stringResource(R.string.local_media),
+                                        ),
+                                    songCount = localMediaSongs.size,
+                                    songThumbnails =
+                                        localMediaSongs
+                                            .take(4)
+                                            .map { it.thumbnailPath }
+                                            .filterNotNull(),
+                                )
+                            PlaylistListItem(
+                                playlist = localMediaPlaylist,
+                                autoPlaylist = true,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            navController.navigate("local_media")
                                         }.animateItem(),
                             )
                         }
@@ -897,6 +931,40 @@ fun LibraryMixScreen(
                                         .fillMaxWidth()
                                         .clickable {
                                             navController.navigate("auto_playlist/uploaded")
+                                        }.animateItem(),
+                            )
+                        }
+                    }
+
+                    if (localMedia.value.isNotEmpty()) {
+                        item(
+                            key = "localMedia",
+                            contentType = { CONTENT_TYPE_PLAYLIST },
+                        ) {
+                            val localMediaSongs = localMedia.value
+                            val localMediaPlaylist =
+                                Playlist(
+                                    playlist =
+                                        PlaylistEntity(
+                                            id = "local_media",
+                                            name = stringResource(R.string.local_media),
+                                        ),
+                                    songCount = localMediaSongs.size,
+                                    songThumbnails =
+                                        localMediaSongs
+                                            .take(4)
+                                            .map { it.thumbnailPath }
+                                            .filterNotNull(),
+                                )
+                            PlaylistGridItem(
+                                playlist = localMediaPlaylist,
+                                fillMaxWidth = true,
+                                autoPlaylist = true,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            navController.navigate("local_media")
                                         }.animateItem(),
                             )
                         }

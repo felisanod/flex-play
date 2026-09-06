@@ -89,6 +89,33 @@ fun <E> ChipsRow(
     }
 }
 
+@Composable
+fun <E> NeumorphChipsRow(
+    chips: List<Pair<E, String>>,
+    currentValue: E,
+    onValueUpdate: (E) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier =
+        modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal)),
+    ) {
+        Spacer(Modifier.width(12.dp))
+
+        chips.forEach { (value, label) ->
+            NeumorphFilterChip(
+                label = label,
+                selected = currentValue == value,
+                onClick = { onValueUpdate(value) },
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+    }
+}
+
 @SuppressLint("UnusedContentLambdaTargetStateParameter")
 @Composable
 fun <Int> ChoiceChipsRow(

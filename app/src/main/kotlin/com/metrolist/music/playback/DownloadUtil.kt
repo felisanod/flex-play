@@ -10,6 +10,7 @@ import android.net.ConnectivityManager
 import androidx.core.content.getSystemService
 import androidx.core.net.toUri
 import androidx.media3.database.DatabaseProvider
+import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.cache.Cache
@@ -41,7 +42,10 @@ import com.flexplayer.music.utils.InnerTubeXPlayer
 import com.flexplayer.music.utils.enumPreference
 import com.flexplayer.music.utils.LocalMediaMetadata
 import com.flexplayer.music.utils.LocalMediaStore
+import com.flexplayer.music.utils.LocalMediaScanner
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.File
+import java.io.FileOutputStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -262,6 +266,9 @@ constructor(
                                     removeFromPlayerCache(download.request.id)
                                     scope.launch {
                                         saveToMediaStore(download.request.id)
+                                        kotlinx.coroutines.delay(500)
+                                        LocalMediaScanner.removeMissingFiles(context, database)
+                                        LocalMediaScanner.scanLocalMedia(context, database)
                                     }
                                 }
                                 Download.STATE_FAILED,
@@ -405,41 +412,87 @@ constructor(
     }
 
     private suspend fun saveToMediaStore(songId: String) {
-        val song = database.getSongByIdBlocking(songId) ?: return
-        val formatEntity = database.format(songId).first() ?: return
+        val song = database.getSongByIdBlocking(songId) ?: run {
+            Timber.tag(TAG).w("saveToMediaStore: song $songId not found")
+            return
+        }
+        val formatEntity = database.format(songId).first() ?: run {
+            Timber.tag(TAG).w("saveToMediaStore: format for $songId not found")
+            return
+        }
 
-        val cacheDir = context.filesDir.resolve("download")
+        // MediaStore rejects some containers (e.g. audio/webm). When that
+        // happens LocalMediaStore falls back to writing the file directly to
+        // the public Music directory so the bytes still end up on disk and
+        // visible to other apps.
         val mimeType = formatEntity.mimeType ?: "audio/mpeg"
-        val extension = mimeType.substringAfterLast("/").substringAfterLast(";").trim()
-
-        val cachedFile = cacheDir.listFiles()?.find { file ->
-            file.nameWithoutExtension == songId || file.name == songId
-        } ?: run {
-            cacheDir.listFiles()?.find { file ->
-                file.extension.equals(extension, ignoreCase = true)
-            }
-        } ?: return
 
         val metadata = LocalMediaMetadata(
             title = song.title,
-            artist = song.artists.joinToString(", ") { it.name },
+            artist = song.artists.joinToString(", ") { it.name }.ifBlank { null },
             album = song.album?.title,
             duration = song.song.duration.takeIf { it > 0 },
             thumbnailPath = song.thumbnailUrl,
         )
 
+        val cacheDataSourceFactory = CacheDataSource
+            .Factory()
+            .setCache(downloadCache)
+            .setUpstreamDataSourceFactory(
+                OkHttpDataSource.Factory(streamHttpClient),
+            )
+
+        val tempFile = File(context.cacheDir, "tmp_download_$songId")
+        if (tempFile.exists()) tempFile.delete()
+
+        val dataSource = cacheDataSourceFactory.createDataSource()
+        val dataSpec = DataSpec(songId.toUri())
+        try {
+            dataSource.open(dataSpec)
+            FileOutputStream(tempFile).use { fos ->
+                val buffer = ByteArray(8 * 1024)
+                while (true) {
+                    val bytesRead = dataSource.read(buffer, 0, buffer.size)
+                    if (bytesRead == -1) break
+                    fos.write(buffer, 0, bytesRead)
+                }
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Failed to read cached file for $songId")
+            tempFile.delete()
+            return
+        } finally {
+            runCatching { dataSource.close() }
+        }
+
+        if (!tempFile.exists() || tempFile.length() == 0L) {
+            Timber.tag(TAG).w("saveToMediaStore: temp file missing/empty for $songId")
+            tempFile.delete()
+            return
+        }
+
+        Timber.tag(TAG).d(
+            "saveToMediaStore: read ${tempFile.length()} bytes for $songId (expected ${formatEntity.contentLength}, mimeType=$mimeType)",
+        )
+
         val localMedia = LocalMediaStore.saveDownloadedFile(
             context = context,
-            sourceFile = cachedFile,
+            sourceFile = tempFile,
             songId = songId,
             displayName = song.title,
             mimeType = mimeType,
             metadata = metadata,
         )
 
+        tempFile.delete()
+
         if (localMedia != null) {
-            database.insert(localMedia)
+            runCatching { database.insert(localMedia) }
+                .onFailure { Timber.tag(TAG).e(it, "Failed to insert LocalMediaEntity for $songId") }
             database.updateDownloadedInfo(songId, true, LocalDateTime.now())
+            Timber.tag(TAG).d("saveToMediaStore: $songId saved to ${localMedia.mediaStoreUri}")
+        } else {
+            Timber.tag(TAG).w("saveToMediaStore: failed to persist $songId to MediaStore")
         }
     }
 
